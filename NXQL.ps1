@@ -132,23 +132,23 @@ function Invoke-main {
     $Form.Controls.Add($LabelPlatform)
 
     $CheckboxWindows = New-Object System.Windows.Forms.Checkbox 
-    $CheckboxWindows.Location = New-Object System.Drawing.Size(555,25) 
-    $CheckboxWindows.Size = New-Object System.Drawing.Size(100,20)
+    $CheckboxWindows.Location = New-Object System.Drawing.Size(555, 25) 
+    $CheckboxWindows.Size = New-Object System.Drawing.Size(100, 20)
     $CheckboxWindows.Text = "Windows"
     $CheckboxWindows.checked = $true
     $CheckboxWindows.TabIndex = 4
     $Form.Controls.Add($CheckboxWindows)
 
     $CheckboxMac_OS = New-Object System.Windows.Forms.Checkbox 
-    $CheckboxMac_OS.Location = New-Object System.Drawing.Size(555,45) 
-    $CheckboxMac_OS.Size = New-Object System.Drawing.Size(100,20)
+    $CheckboxMac_OS.Location = New-Object System.Drawing.Size(555, 45) 
+    $CheckboxMac_OS.Size = New-Object System.Drawing.Size(100, 20)
     $CheckboxMac_OS.Text = "Mac OS"
     $CheckboxMac_OS.TabIndex = 4
     $Form.Controls.Add($CheckboxMac_OS)
 
     $CheckboxMobile = New-Object System.Windows.Forms.Checkbox 
-    $CheckboxMobile.Location = New-Object System.Drawing.Size(555,65) 
-    $CheckboxMobile.Size = New-Object System.Drawing.Size(100,20)
+    $CheckboxMobile.Location = New-Object System.Drawing.Size(555, 65) 
+    $CheckboxMobile.Size = New-Object System.Drawing.Size(100, 20)
     $CheckboxMobile.Text = "Mobile"
     $CheckboxMobile.TabIndex = 4
     $Form.Controls.Add($CheckboxMobile)
@@ -376,13 +376,13 @@ function Invoke-NXQLQueryRun {
     $LabelRunStatus.Visible = $true
     # Check Platform
     $Script:Platform = @()
-    if($CheckboxWindows.checked){
+    if ($CheckboxWindows.checked) {
         $Script:Platform += "windows"
     }
-    if($CheckboxMac_OS.checked){
+    if ($CheckboxMac_OS.checked) {
         $Script:Platform += "mac_os"
     }
-    if($CheckboxMobile.checked){
+    if ($CheckboxMobile.checked) {
         $Script:Platform += "mobile"
     }
     Write-Host $Script:Platform
@@ -452,6 +452,26 @@ function Invoke-QueryValidation {
         }
         else {
             return "Failed: Some brackets are not closed !"
+        }
+    }
+    if (($Query.ToCharArray() | Where-Object { $_ -eq '`"' } | Measure-Object).Count `
+            -ne `
+        ($Query.ToCharArray() | Where-Object { $_ -eq '`"' } | Measure-Object).Count) {
+        if ($Ligth) {
+            return "Some quotes are not closed !"
+        }
+        else {
+            return "Failed: Some quotes are not closed !"
+        }
+    }
+    if (($Query.ToCharArray() | Where-Object { $_ -eq "`'" } | Measure-Object).Count `
+            -ne `
+        ($Query.ToCharArray() | Where-Object { $_ -eq "`'" } | Measure-Object).Count) {
+        if ($Ligth) {
+            return "Some quotes are not closed !"
+        }
+        else {
+            return "Failed: Some quotes are not closed !"
         }
     }
     if ($Ligth) {
