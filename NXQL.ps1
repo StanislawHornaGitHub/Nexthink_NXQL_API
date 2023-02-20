@@ -231,6 +231,7 @@ function Invoke-main {
     $ButtonWebEditor = New-Object System.Windows.Forms.Button
     $ButtonWebEditor.Location = New-Object System.Drawing.Point(585, 540)
     $ButtonWebEditor.Size = New-Object System.Drawing.Size(100, 50)
+    $ButtonWebEditor.Visible = $false
     $ButtonWebEditor.Text = 'Open Web Query Editor'
     $ButtonWebEditor.Add_Click({ Invoke-WebQueryEditor })
     $Form.Controls.Add($ButtonWebEditor)
