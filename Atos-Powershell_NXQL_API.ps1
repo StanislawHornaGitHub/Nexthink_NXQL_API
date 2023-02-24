@@ -1,0 +1,1 @@
+PowerShell.exe -WindowStyle hidden ./main/NXQL.ps1

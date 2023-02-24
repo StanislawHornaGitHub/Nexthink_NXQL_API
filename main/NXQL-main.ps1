@@ -8,6 +8,7 @@ New-Variable -Name 'Login' -Value "-" -Scope Script
 New-Variable -Name 'Environment' -Value "-" -Scope Script
 New-Variable -Name 'LogPath' -Value "$((Get-Location).Path)/Logs" -Scope Script
 New-Variable -Name 'Platform' -Value @() -Scope Script
+
 function Invoke-main {
 
     $Form = New-Object system.Windows.Forms.Form
@@ -203,14 +204,14 @@ function Invoke-main {
     $BoxPath.Multiline = $false
     $BoxPath.Location = New-Object System.Drawing.Size(150, 510) 
     $BoxPath.Size = New-Object System.Drawing.Size(430, 20)
-    $BoxPath.Text = (Get-Location).Path + "\"
+    $BoxPath.Text = (((Get-Location).Path.Split("\")[0..((Get-Location).Path.Split("\").count - 2)] -join "\") + "\")
     $Form.Controls.Add($BoxPath)
 
     $BoxPort = New-Object System.Windows.Forms.TextBox 
     $BoxPort.Multiline = $false
     $BoxPort.Location = New-Object System.Drawing.Size(640, 140) 
     $BoxPort.Size = New-Object System.Drawing.Size(40, 20)
-    $BoxPort.Text = (Get-Location).Path + "\"
+    $BoxPort.Text = ""
     $BoxPort.Visible = $false
     $Form.Controls.Add($BoxPort)
 
@@ -369,24 +370,23 @@ Function Get-Folder {
     return $FolderBrowserDialog.SelectedPath
 }
 function Invoke-NXQLQueryRun {
-    [String]$Query = $BoxQuery.Text
-    $FileName = $BoxFileName.Text
     # Update Export status
     $LabelRunStatus.ForeColor = "orange"
     $LabelRunStatus.Text = "Proccessing..."
     $LabelRunStatus.Visible = $true
+    [String]$Query = $BoxQuery.Text
+    $FileName = $BoxFileName.Text
     # Check Platform
-    $Script:Platform = @()
+    $Platform = @()
     if ($CheckboxWindows.checked) {
-        $Script:Platform += "windows"
+        $Platform += "windows"
     }
     if ($CheckboxMac_OS.checked) {
-        $Script:Platform += "mac_os"
+        $Platform += "mac_os"
     }
     if ($CheckboxMobile.checked) {
-        $Script:Platform += "mobile"
+        $Platform += "mobile"
     }
-    Write-Host $Script:Platform
     # Invoke Basic Query validation
     $Status = Invoke-QueryValidation -Query $Query
     if ($null -ne $Status) {
@@ -410,6 +410,9 @@ function Invoke-NXQLQueryRun {
     $WebAPIPort = $BoxPort.text
     $Path = $BoxPath.text
     $FileName = $BoxFileName.text
+    if (!(Test-Path -Path $Path)) {
+        New-Item -Path $Path -ItemType Directory
+    }
     # Check if user added file extension
     if (($FileName -notlike "*.csv") -and ($FileName -notlike "*.txt")) {
         $FilePath = "$Path\$Filename.csv"
@@ -425,8 +428,9 @@ function Invoke-NXQLQueryRun {
         -Query $Query `
         -credentials $script:Credentials `
         -webapiPort $WebAPIPort `
-        -Platform $Script:Platform `
-        -EngineList $script:Engines -DestinationPath $FilePath `
+        -Platform $Platform `
+        -EngineList $script:Engines `
+        -DestinationPath $FilePath `
         -SyncPath $script:LogPath `
         -LogPath $script:LogPath
     # Check if any data was returned
