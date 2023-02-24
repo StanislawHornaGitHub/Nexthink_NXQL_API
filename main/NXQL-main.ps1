@@ -20,12 +20,15 @@ function Invoke-main {
     $Form.ClientSize = New-Object System.Drawing.Point(480, 150)
     $Form.text = "Powershell NXQL API"
     $Form.TopMost = $true
+    # Handling if opened via Powershell ISE
     if ($null -ne (Get-Process powershell)) {
         $p = (Get-Process powershell | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
-    }
-    if ($null -ne $p) {
         $Form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
     }
+
+    ######################################################################
+    #-------------------------- Labels Section --------------------------#
+    ######################################################################
 
     $LabelPortal = New-Object system.Windows.Forms.Label
     $LabelPortal.text = "Portal FQDN: "
@@ -144,6 +147,10 @@ function Invoke-main {
     $LabelPlatform.Visible = $false
     $Form.Controls.Add($LabelPlatform)
 
+    ######################################################################
+    #------------------------ Checkboxes Section ------------------------#
+    ######################################################################
+
     $CheckboxWindows = New-Object System.Windows.Forms.Checkbox 
     $CheckboxWindows.Location = New-Object System.Drawing.Size(555, 25) 
     $CheckboxWindows.Size = New-Object System.Drawing.Size(100, 20)
@@ -186,6 +193,10 @@ function Invoke-main {
         
         })
     $Form.Controls.Add($CheckboxShowPassword)
+
+    ######################################################################
+    #------------------------- TextBoxes Section ------------------------#
+    ######################################################################
 
     $BoxPortal = New-Object System.Windows.Forms.TextBox 
     $BoxPortal.Multiline = $false
@@ -255,6 +266,10 @@ function Invoke-main {
     $BoxPort.Visible = $false
     $Form.Controls.Add($BoxPort)
 
+    ######################################################################
+    #------------------------- Buttons Section --------------------------#
+    ######################################################################
+
     $ButtonConnect = New-Object System.Windows.Forms.Button
     $ButtonConnect.Location = New-Object System.Drawing.Point(20, 100)
     $ButtonConnect.Size = New-Object System.Drawing.Size(100, 30)
@@ -291,6 +306,7 @@ function Invoke-main {
 }
 
 function Invoke-CredentialCleanup {
+    Invoke-FormResize
     $ButtonRunQuery.Visible = $false
     $ButtonWebEditor.Visible = $false
     $LabelConnectionStatus.Visible = $false
@@ -299,12 +315,9 @@ function Invoke-CredentialCleanup {
     $LabelRunStatus.Visible = $false
     $BoxPassword.text = ""
     $BoxLogin.text = ""    
-    # Hide additional fields if button clicked multiple times
-    Invoke-FormResize
 }
 function Invoke-UsernameChange {
     Invoke-FormResize
-    $LabelConnectionStatusDetails.Text = ""
     $ButtonRunQuery.Visible = $false
     $ButtonWebEditor.Visible = $false
     $LabelConnectionStatus.Visible = $false
@@ -312,6 +325,7 @@ function Invoke-UsernameChange {
     $LabelNumberOfEngines.Visible = $false
     $LabelRunStatus.Visible = $false
     $BoxPassword.text = ""
+    $LabelConnectionStatusDetails.Text = ""
 }
 
 function Invoke-PortalConnection {
@@ -433,6 +447,7 @@ function Invoke-NXQLQueryRun {
     $LabelRunStatus.ForeColor = "orange"
     $LabelRunStatus.Text = "Proccessing..."
     $LabelRunStatus.Visible = $true
+    # Disable Query Box for user to be unable to modify before reading it to variable
     $BoxQuery.enabled = $false
     Invoke-Buttons
     [String]$Query = $BoxQuery.Text
@@ -449,6 +464,7 @@ function Invoke-NXQLQueryRun {
     if ($CheckboxMobile.checked) {
         $Platform += "mobile"
     }
+    # Handling if no platform is selected
     if ($null -eq $Platform) {
         $LabelRunStatus.Visible = $true
         $LabelRunStatus.ForeColor = "red"
@@ -475,9 +491,9 @@ function Invoke-NXQLQueryRun {
         Invoke-Buttons -Enable
         return
     }
+    # If user set inccorret filename and on the next run it is correct remove red label
     $LabelFileName.ForeColor = "black"
     $LabelFileName.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
-    [string]$Query = $BoxQuery.text
     $WebAPIPort = $BoxPort.text
     $Path = $BoxPath.text
     $FileName = $BoxFileName.text
@@ -560,21 +576,26 @@ function Invoke-QueryValidation {
     if ($Query.Length -le 1) {
         return "Failed: NXQL query can not be blank !"
     }
-    # Check if select statement exist
+    # Check if select statement exists
     if (($Query -notlike "*select*")) {
         return "Failed: There is no `"select`" statement !"
     }
+    # Check if from statement exists
     if (($Query -notlike "*from*")) {
         return "Failed: There is no `"from`" statement !"
     }
+    # Check if limit statement exists
     if (($Query -notlike "*limit*")) {
         return "Failed: There is no `"limit`" statement !"
     }
     return $null
 }
 function Invoke-WebQueryEditor {
+    # Select one of the engines
     $engine = ($script:Engines | Select-Object -First 1).address
+    # Create a link to NXQL web editor
     $WebEditorAddress = "https://$engine/2/editor/nxql_editor.html"
+    # Run the link
     Start-Process "$WebEditorAddress"
 }
 function Get-EngineList {
@@ -909,18 +930,21 @@ Function Get-NxqlExport {
     # Dynamically remove completed jobs
     $CompletedJobsCounter += (Get-Job -Name "NXQL*" | Where-Object { $_.State -eq "Completed" }).Count
     Get-Job -Name "NXQL*" | Remove-Job
+    # Clear Thread synchronization files
     if (Test-Path -Path "$SyncPath\Headers") {
         Remove-Item -Path "$SyncPath\Headers" -Confirm:$false -Force
     }
     if (Test-Path -Path "$SyncPath\Wait") {
         Remove-Item -Path "$SyncPath\Wait" -Confirm:$false -Force
     }
+    # Handling for environments with only one engine
     if ($null -eq $Engines.count) {
         $Number_of_engines = 1
     }
     else {
         $Number_of_engines = $Engines.Count
     }
+    # Check if outputs from all engines are pasted to the result file
     if ($CompletedJobsCounter -eq $Number_of_engines) {
         return "Success!"
     }
@@ -932,6 +956,7 @@ Function Get-NxqlExport {
     }
 }
 function Invoke-FormResize {
+    # Function to change window mode
     param (
         [switch]$Big
     )
@@ -968,6 +993,7 @@ function Invoke-FormResize {
     }
 }
 function Invoke-Buttons {
+    # Function to disable and enable action buttons
     param (
         [switch]$Enable
     )
