@@ -1,22 +1,31 @@
 Add-Type -AssemblyName System.Windows.Forms
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-New-Variable -Name 'Engines' -Value @() -Scope Script
-New-Variable -Name 'Credentials' -value "-" -Scope Script
-New-Variable -Name 'PortalFQDN' -value "-" -Scope Script
-New-Variable -Name 'Login' -Value "-" -Scope Script
-New-Variable -Name 'Environment' -Value "-" -Scope Script
-New-Variable -Name 'LogPath' -Value "$((Get-Location).Path)/Logs" -Scope Script
-New-Variable -Name 'Platform' -Value @() -Scope Script
+$ErrorActionPreference = 'Stop'
+try {
+    New-Variable -Name 'Engines' -Value @() -Scope Script
+    New-Variable -Name 'Credentials' -value "-" -Scope Script
+    New-Variable -Name 'PortalFQDN' -value "-" -Scope Script
+    New-Variable -Name 'Login' -Value "-" -Scope Script
+    New-Variable -Name 'Environment' -Value "-" -Scope Script
+    New-Variable -Name 'LogPath' -Value "$((Get-Location).Path)/Logs" -Scope Script
+    New-Variable -Name 'Platform' -Value @() -Scope Script
+}
+catch {}
+
 
 function Invoke-main {
 
     $Form = New-Object system.Windows.Forms.Form
-    $Form.ClientSize = New-Object System.Drawing.Point(700, 600)
+    $Form.ClientSize = New-Object System.Drawing.Point(480, 150)
     $Form.text = "Powershell NXQL API"
-    $Form.TopMost = $false
-    $p = (Get-Process powershell | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
-    $Form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+    $Form.TopMost = $true
+    if ($null -ne (Get-Process powershell)) {
+        $p = (Get-Process powershell | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
+    }
+    if ($null -ne $p) {
+        $Form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+    }
 
     $LabelPortal = New-Object system.Windows.Forms.Label
     $LabelPortal.text = "Portal FQDN: "
@@ -81,6 +90,7 @@ function Invoke-main {
     $LabelQuery.width = 25
     $LabelQuery.height = 10
     $LabelQuery.location = New-Object System.Drawing.Point(20, 140)
+    $LabelQuery.Visible = $false
     $LabelQuery.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
     $Form.Controls.Add($LabelQuery)
 
@@ -100,15 +110,17 @@ function Invoke-main {
     $LabelFileName.width = 25
     $LabelFileName.height = 10
     $LabelFileName.location = New-Object System.Drawing.Point(20, 480)
+    $LabelFileName.Visible = $false
     $LabelFileName.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
     $Form.Controls.Add($LabelFileName)
 
     $LabelPath = New-Object System.Windows.Forms.Label
-    $LabelPath.Text = "Destination Path:"
+    $LabelPath.Text = "Destination Path"
     $LabelPath.AutoSize = $true
     $LabelPath.width = 25
     $LabelPath.height = 10
     $LabelPath.location = New-Object System.Drawing.Point(20, 510)
+    $LabelPath.Visible = $false
     $LabelPath.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
     $Form.Controls.Add($LabelPath)
 
@@ -129,7 +141,7 @@ function Invoke-main {
     $LabelPlatform.height = 10
     $LabelPlatform.location = New-Object System.Drawing.Point(550, 0)
     $LabelPlatform.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
-    $LabelPlatform.Visible = $true
+    $LabelPlatform.Visible = $false
     $Form.Controls.Add($LabelPlatform)
 
     $CheckboxWindows = New-Object System.Windows.Forms.Checkbox 
@@ -137,6 +149,7 @@ function Invoke-main {
     $CheckboxWindows.Size = New-Object System.Drawing.Size(100, 20)
     $CheckboxWindows.Text = "Windows"
     $CheckboxWindows.checked = $true
+    $CheckboxWindows.Visible = $false
     $CheckboxWindows.TabIndex = 4
     $Form.Controls.Add($CheckboxWindows)
 
@@ -144,6 +157,7 @@ function Invoke-main {
     $CheckboxMac_OS.Location = New-Object System.Drawing.Size(555, 45) 
     $CheckboxMac_OS.Size = New-Object System.Drawing.Size(100, 20)
     $CheckboxMac_OS.Text = "Mac OS"
+    $CheckboxMac_OS.Visible = $false
     $CheckboxMac_OS.TabIndex = 4
     $Form.Controls.Add($CheckboxMac_OS)
 
@@ -151,8 +165,27 @@ function Invoke-main {
     $CheckboxMobile.Location = New-Object System.Drawing.Size(555, 65) 
     $CheckboxMobile.Size = New-Object System.Drawing.Size(100, 20)
     $CheckboxMobile.Text = "Mobile"
+    $CheckboxMobile.Visible = $false
     $CheckboxMobile.TabIndex = 4
     $Form.Controls.Add($CheckboxMobile)
+
+    $CheckboxShowPassword = New-Object System.Windows.Forms.Checkbox 
+    $CheckboxShowPassword.Location = New-Object System.Drawing.Size(140, 80) 
+    $CheckboxShowPassword.Size = New-Object System.Drawing.Size(200, 20)
+    $CheckboxShowPassword.Text = "Show Password"
+    $CheckboxShowPassword.Visible = $true
+    $CheckboxShowPassword.TabIndex = 4
+    $CheckboxShowPassword.checked = $false
+    $CheckboxShowPassword.Add_Click({
+            if ($CheckboxShowPassword.checked) {
+                $BoxPassword.passwordchar = $null
+            }
+            else {
+                $BoxPassword.passwordchar = "*"
+            }
+        
+        })
+    $Form.Controls.Add($CheckboxShowPassword)
 
     $BoxPortal = New-Object System.Windows.Forms.TextBox 
     $BoxPortal.Multiline = $false
@@ -165,6 +198,7 @@ function Invoke-main {
     $BoxLogin.Multiline = $false
     $BoxLogin.Location = New-Object System.Drawing.Size(140, 30) 
     $BoxLogin.Size = New-Object System.Drawing.Size(300, 20)
+    $BoxLogin.Add_TextChanged({ Invoke-UsernameChange })
     $Form.Controls.Add($BoxLogin)
 
     $BoxPassword = New-Object System.Windows.Forms.MaskedTextBox 
@@ -179,10 +213,14 @@ function Invoke-main {
     $BoxQuery.Location = New-Object System.Drawing.Size(20, 165) 
     $BoxQuery.Size = New-Object System.Drawing.Size(660, 300)
     $BoxQuery.Scrollbars = 'Vertical'
+    $BoxQuery.Visible = $false
     $BoxQuery.Add_TextChanged({
             # Invoke Basic Query validation
             $Status = Invoke-QueryValidation -Query $BoxQuery.Text -Ligth
-            if ($null -ne $Status) {
+            if ($LabelRunStatus.Text -eq "Proccessing...") {
+                return
+            }
+            if (($null -ne $Status)) {
                 $LabelRunStatus.Visible = $true
                 $LabelRunStatus.ForeColor = "red"
                 $LabelRunStatus.Text = $Status
@@ -195,16 +233,18 @@ function Invoke-main {
 
     $BoxFileName = New-Object System.Windows.Forms.TextBox 
     $BoxFileName.Multiline = $false
-    $BoxFileName.Location = New-Object System.Drawing.Size(200, 480) 
-    $BoxFileName.Size = New-Object System.Drawing.Size(485, 20)
+    $BoxFileName.Location = New-Object System.Drawing.Size(190, 480) 
+    $BoxFileName.Size = New-Object System.Drawing.Size(495, 20)
     $BoxFileName.Text = (Get-Date).ToString("yyyy-MM-dd")
+    $BoxFileName.Visible = $false
     $Form.Controls.Add($BoxFileName)
 
     $BoxPath = New-Object System.Windows.Forms.TextBox 
     $BoxPath.Multiline = $false
     $BoxPath.Location = New-Object System.Drawing.Size(150, 510) 
     $BoxPath.Size = New-Object System.Drawing.Size(430, 20)
-    $BoxPath.Text = (((Get-Location).Path.Split("\")[0..((Get-Location).Path.Split("\").count - 2)] -join "\") + "\")
+    $BoxPath.Text = (Get-Location).Path
+    $BoxPath.Visible = $false
     $Form.Controls.Add($BoxPath)
 
     $BoxPort = New-Object System.Windows.Forms.TextBox 
@@ -226,6 +266,7 @@ function Invoke-main {
     $ButtonPath.Location = New-Object System.Drawing.Point(585, 505)
     $ButtonPath.Size = New-Object System.Drawing.Size(100, 30)
     $ButtonPath.Text = 'Select'
+    $ButtonPath.Visible = $false
     $ButtonPath.Add_Click({ $BoxPath.Text = Get-Folder -inputFolder $BoxPath.Text })
     $Form.Controls.Add($ButtonPath)
 
@@ -245,7 +286,7 @@ function Invoke-main {
     $ButtonRunQuery.Add_Click({ Invoke-NXQLQueryRun })
     $Form.Controls.Add($ButtonRunQuery)
 
-
+    $Form.AcceptButton = $ButtonConnect
     [void]$Form.ShowDialog()
 }
 
@@ -258,7 +299,21 @@ function Invoke-CredentialCleanup {
     $LabelRunStatus.Visible = $false
     $BoxPassword.text = ""
     $BoxLogin.text = ""    
+    # Hide additional fields if button clicked multiple times
+    Invoke-FormResize
 }
+function Invoke-UsernameChange {
+    Invoke-FormResize
+    $LabelConnectionStatusDetails.Text = ""
+    $ButtonRunQuery.Visible = $false
+    $ButtonWebEditor.Visible = $false
+    $LabelConnectionStatus.Visible = $false
+    $LabelConnectionStatusDetails.Visible = $false
+    $LabelNumberOfEngines.Visible = $false
+    $LabelRunStatus.Visible = $false
+    $BoxPassword.text = ""
+}
+
 function Invoke-PortalConnection {
     # Remember password while Button is clicked multiple times without changing anything
     $KeepCredentials = $false
@@ -277,12 +332,14 @@ function Invoke-PortalConnection {
     $LabelRunStatus.Visible = $false
     $LabelPort.Visible = $false
     $BoxPort.Visible = $false
+    # Hide additional fields if button clicked multiple times
+    Invoke-FormResize
     # Fill in the first part of output name and format portal connection details
     $BoxFileName.Text = (Get-Date).ToString("yyyy-MM-dd")
     $LabelConnectionStatus.Text = "Connection state:"
     $LabelConnectionStatus.ForeColor = "black"
     # Check if fields are not empty if yes exit
-    if ($BoxLogin.Text.Length -lt 1 -and
+    if ($BoxLogin.Text.Length -lt 1 -or
         $BoxPassword.Text.Length -lt 1) {
         $BoxPassword.text = ""
         $LabelConnectionStatus.Text = "Login and password can not be empty !"
@@ -327,6 +384,8 @@ function Invoke-PortalConnection {
     $LabelConnectionStatusDetails.text = "Connected"
     $LabelConnectionStatusDetails.ForeColor = "green"
     $LabelNumberOfEngines.text = "Number of engines: $Number_of_engines"
+    # Display additional fields
+    Invoke-FormResize -Big
     $LabelNumberOfEngines.Visible = $true
     $ButtonRunQuery.Visible = $true
     # Check environment type SAAS / On-prem
@@ -374,7 +433,10 @@ function Invoke-NXQLQueryRun {
     $LabelRunStatus.ForeColor = "orange"
     $LabelRunStatus.Text = "Proccessing..."
     $LabelRunStatus.Visible = $true
+    $BoxQuery.enabled = $false
+    Invoke-Buttons
     [String]$Query = $BoxQuery.Text
+    $BoxQuery.enabled = $true
     $FileName = $BoxFileName.Text
     # Check Platform
     $Platform = @()
@@ -387,12 +449,20 @@ function Invoke-NXQLQueryRun {
     if ($CheckboxMobile.checked) {
         $Platform += "mobile"
     }
+    if ($null -eq $Platform) {
+        $LabelRunStatus.Visible = $true
+        $LabelRunStatus.ForeColor = "red"
+        $LabelRunStatus.Text = "There is no platform selected"
+        Invoke-Buttons -Enable
+        return
+    }
     # Invoke Basic Query validation
     $Status = Invoke-QueryValidation -Query $Query
     if ($null -ne $Status) {
         $LabelRunStatus.Visible = $true
         $LabelRunStatus.ForeColor = "red"
         $LabelRunStatus.Text = $Status
+        Invoke-Buttons -Enable
         return
     }
     # Check if the file name does not contain any "/" or "\"
@@ -402,6 +472,7 @@ function Invoke-NXQLQueryRun {
         
         $LabelFileName.ForeColor = "red"
         $LabelFileName.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12, [System.Drawing.FontStyle]::Bold)
+        Invoke-Buttons -Enable
         return
     }
     $LabelFileName.ForeColor = "black"
@@ -434,14 +505,17 @@ function Invoke-NXQLQueryRun {
         -SyncPath $script:LogPath `
         -LogPath $script:LogPath
     # Check if any data was returned
-    if ($null -eq $result) {
-        $LabelRunStatus.ForeColor = "red"
-        $LabelRunStatus.Text = "Failed: Output is empty !"
+    if ($result -eq "Success!") {
+        $LabelRunStatus.Visible = $true
+        $LabelRunStatus.ForeColor = "green"
+        $LabelRunStatus.Text = $result
     }
     else {
-        $LabelRunStatus.ForeColor = "green"
-        $LabelRunStatus.Text = "Success!"
+        $LabelRunStatus.Visible = $true
+        $LabelRunStatus.ForeColor = "red"
+        $LabelRunStatus.Text = $result
     }
+    Invoke-Buttons -Enable
 }
 function Invoke-QueryValidation {
     param (
@@ -565,8 +639,12 @@ function Invoke-EnvironmentSelection {
     $EnvSelect.ClientSize = New-Object System.Drawing.Point(390, 100)
     $EnvSelect.text = "Powershell NXQL API"
     $EnvSelect.TopMost = $true
-    $p = (Get-Process powershell | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
-    $EnvSelect.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+    if ($null -ne (Get-Process powershell)) {
+        $p = (Get-Process powershell | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
+    }
+    if ($null -ne $p) {
+        $EnvSelect.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+    }
 
     $LabelQuestion = New-Object system.Windows.Forms.Label
     $LabelQuestion.text = "On which environment do you want to run query?"
@@ -769,6 +847,7 @@ Function Get-NxqlExport {
             }
             catch {
                 $_.Exception | Out-File "$LogPath\Log-$EngineAddress.csv" -Append
+                "Probably bad query" | Out-File "$LogPath\BadRequest"
                 throw "Not able to collect data"
             }
             # Split to be able to remove unnecesary headers
@@ -805,7 +884,7 @@ Function Get-NxqlExport {
                 # Append output file without headers
                 $out[1..($out.count - 2)] | Out-File $DestinationPath -Append
                 "$(([System.DateTime]::Now).ToString('HH\:mm\:ss\.fff')) Data was written to the result file" | Out-File "$LogPath\Log-$EngineAddress.csv" -Append
-                "$(([System.DateTime]::Now).ToString('HH\:mm\:ss\.fff')) $EngineAddress written data to the result file with headers" | Out-File "$LogPath\Log-Write-Order.csv" -Append
+                "$(([System.DateTime]::Now).ToString('HH\:mm\:ss\.fff')) $EngineAddress written data to the result file without headers" | Out-File "$LogPath\Log-Write-Order.csv" -Append
             }
             else {
                 # Set flag for headers
@@ -824,14 +903,12 @@ Function Get-NxqlExport {
     }
     $CompletedJobsCounter = 0
     # Wait until all jobs will be done
-    while ($null -ne (Get-Job -Name "NXQL*")) {
-        while ($null -eq (Get-Job -Name "NXQL*" | Where-Object { $_.State -ne "Running" })) {
-            Start-Sleep -Milliseconds 500
-        }
-        # Dynamically remove completed jobs
-        $CompletedJobsCounter += (Get-Job -Name "NXQL*" | Where-Object { $_.State -eq "Completed" }).Count
-        Get-Job -Name "NXQL*" | Where-Object { $_.State -ne "Running" } | Remove-Job
+    while ((Get-Job -Name "NXQL*").State -contains "Running") {
+        [System.Windows.Forms.Application]::DoEvents()
     }
+    # Dynamically remove completed jobs
+    $CompletedJobsCounter += (Get-Job -Name "NXQL*" | Where-Object { $_.State -eq "Completed" }).Count
+    Get-Job -Name "NXQL*" | Remove-Job
     if (Test-Path -Path "$SyncPath\Headers") {
         Remove-Item -Path "$SyncPath\Headers" -Confirm:$false -Force
     }
@@ -845,10 +922,77 @@ Function Get-NxqlExport {
         $Number_of_engines = $Engines.Count
     }
     if ($CompletedJobsCounter -eq $Number_of_engines) {
-        return $DestinationPath
+        return "Success!"
+    }
+    elseif (Test-Path "$LogPath\BadRequest") {
+        return "Failed: Invalid NXQL query"
     }
     else {
-        return $null
+        return "Failed: Error unknown"
     }
 }
+function Invoke-FormResize {
+    param (
+        [switch]$Big
+    )
+    if ($Big) {
+        $Form.TopMost = $false
+        $Form.ClientSize = New-Object System.Drawing.Point(700, 600)
+        $LabelQuery.Visible = $true
+        $BoxQuery.Visible = $true
+        $LabelFileName.Visible = $true
+        $BoxFileName.Visible = $true
+        $LabelPath.Visible = $true
+        $BoxPath.Visible = $true
+        $ButtonPath.Visible = $true
+        $LabelPlatform.Visible = $true
+        $CheckboxWindows.Visible = $true
+        $CheckboxMac_OS.Visible = $true
+        $CheckboxMobile.Visible = $true
+    }
+    else {
+        $Form.TopMost = $true
+        $Form.ClientSize = New-Object System.Drawing.Point(480, 150)
+        $LabelQuery.Visible = $false
+        $BoxQuery.Visible = $false
+        $LabelFileName.Visible = $false
+        $BoxFileName.Visible = $false
+        $LabelPath.Visible = $false
+        $BoxPath.Visible = $false
+        $ButtonPath.Visible = $false
+        $LabelPlatform.Visible = $false
+        $CheckboxWindows.Visible = $false
+        $CheckboxMac_OS.Visible = $false
+        $CheckboxMobile.Visible = $false
+        $ButtonWebEditor.Visible = $false
+    }
+}
+function Invoke-Buttons {
+    param (
+        [switch]$Enable
+    )
+    if ($Enable) {
+        $ButtonConnect.enabled = $true
+        $ButtonRunQuery.enabled = $true
+        $ButtonPath.enabled = $true
+        $BoxPath.enabled = $true
+        $BoxFileName.enabled = $true
+        $BoxPort.enabled = $true
+        $CheckboxWindows.enabled = $true
+        $CheckboxMac_OS.enabled = $true
+        $CheckboxMobile.enabled = $true
+    }
+    else {
+        $ButtonConnect.enabled = $false
+        $ButtonRunQuery.enabled = $false
+        $ButtonPath.enabled = $false
+        $BoxPath.enabled = $false
+        $BoxFileName.enabled = $false
+        $BoxPort.enabled = $false
+        $CheckboxWindows.enabled = $false
+        $CheckboxMac_OS.enabled = $false
+        $CheckboxMobile.enabled = $false
+    }
+}
+
 Invoke-main
