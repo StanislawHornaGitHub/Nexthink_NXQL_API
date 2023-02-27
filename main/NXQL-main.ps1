@@ -24,6 +24,10 @@
     ChangeLog:
 
     Date            Who                     What
+    2023-02-18      Stanislaw Horna         Basic query validation added;
+                                            Mechanism to keep credentials if valid;
+                                            MoJ select environment GUI form added.
+
     2023-02-24      Stanislaw Horna         Show password button added;
                                             Connecting to portal with ENTER key;
                                             More accurate error handling;
@@ -31,8 +35,8 @@
     
     2023-02-27      Stanislaw Horna         Better Handling if unable to create neccesary variables;
                                             Handling for running on unsupported environment;
-                                            Handling for no write permission
-                                            Handling for running multiple apps at the same time
+                                            Handling for no write permission;
+                                            Handling for running multiple apps at the same time.
                                             
 #>
 
