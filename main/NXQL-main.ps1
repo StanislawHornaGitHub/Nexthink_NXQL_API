@@ -1,14 +1,126 @@
-Add-Type -AssemblyName System.Windows.Forms
-[System.Windows.Forms.Application]::EnableVisualStyles()
+<#
+.SYNOPSIS
+    Script to retrieve data from Nexthink via NXQL API
 
+.DESCRIPTION
+    GUI PowerShell script to to retrieve data from Nexthink via NXQL API.
+    Create to use on multi engine Nexthink Experience environments.
+    The result file will contains merged output from all connected engines,
+    without any additional headers and blank lines.
+
+.INPUTS
+    Portal FQDN
+    Username
+    Password
+    NXQL Query
+.OUTPUTS
+    Merged Nexthink engines output
+
+.NOTES
+    Version:            1.0
+    Author:             Stanislaw Horna
+    Mail:               stanislaw.horna@atos.net
+    Creation Date:      16-Feb-2023
+    ChangeLog:
+
+    Date            Who                     What
+    2023-02-24      Stanislaw Horna         Show password button added;
+                                            Connecting to portal with ENTER key;
+                                            More accurate error handling;
+                                            Possibility to change user, after establishing connection.
+                                            
+#>
 
 function Invoke-main {
-    Invoke-Form
+    Invoke-GettingStarted
+    Invoke-FormMain
     $script:Form.AcceptButton = $script:ButtonConnect
     [void]$script:Form.ShowDialog()
 }
+function Invoke-GettingStarted {
+    $ErrorActionPreference = 'Stop'
+    # Loading additional .NET classes
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Web
+        [System.Windows.Forms.Application]::EnableVisualStyles()
+    }
+    catch {
+        throw 'Currently running environment is not supported'
+    }
 
-function Invoke-Form{
+    # Creating neccessary variables
+    try {
+        New-Variable -Name 'Engines' -Value @() -Scope Script
+    }
+    catch {
+        Remove-Variable -Name 'Engines' -Force
+        New-Variable -Name 'Engines' -Value @() -Scope Script
+    }
+    try {
+        New-Variable -Name 'Credentials' -value "-" -Scope Script
+    }
+    catch {
+        Remove-Variable -Name 'Credentials' -Force
+        New-Variable -Name 'Credentials' -value "-" -Scope Script
+    }
+    try {
+        New-Variable -Name 'PortalFQDN' -value "-" -Scope Script
+    }
+    catch {
+        Remove-Variable -Name 'PortalFQDN' -Force
+        New-Variable -Name 'PortalFQDN' -value "-" -Scope Script
+    }
+    try {
+        New-Variable -Name 'Login' -Value "-" -Scope Script
+    }
+    catch {
+        Remove-Variable -Name 'Login' -Force
+        New-Variable -Name 'Login' -Value "-" -Scope Script
+    }
+    try {
+        New-Variable -Name 'Environment' -Value "-" -Scope Script
+    }
+    catch {
+        Remove-Variable -Name 'Environment' -Force -Confirm:$false
+        New-Variable -Name 'Environment' -Value "-" -Scope Script
+    }
+    try {
+        New-Variable -Name 'LogPath' -Value "$((Get-Location).Path)/Logs" -Scope Script
+    }
+    catch {
+        Remove-Variable -Name 'LogPath' -Force
+        New-Variable -Name 'LogPath' -Value "$((Get-Location).Path)/Logs" -Scope Script
+    }
+    try {
+        New-Variable -Name 'Platform' -Value @() -Scope Script
+    }
+    catch {
+        Remove-Variable -Name 'Platform' -Force -Confirm:$false
+        New-Variable -Name 'Platform' -Value @() -Scope Script
+    }
+    try {
+        New-Variable -Name 'UniqueInstanceLock' -Value "$LogPath\UniqueInstance" -Scope Script
+    }
+    catch {
+        Remove-Variable -Name 'UniqueInstanceLock' -Force -Confirm:$false
+        New-Variable -Name 'UniqueInstanceLock' -Value "$LogPath\UniqueInstance" -Scope Script
+    }
+    
+    # Creating lock file to prevent running multiple instances from the same location
+    
+    try {
+        New-Item -Path $UniqueInstanceLock
+    }
+    catch {
+        Invoke-FormError
+        throw 'Another instance is already running'
+    }
+}
+function Invoke-FormError {
+    [System.Windows.MessageBox]::Show('Another instance of this application is already running.','Instance Error','OK','Error')
+}
+function Invoke-FormMain{
     $script:Form = New-Object system.Windows.Forms.Form
     $script:Form.ClientSize = New-Object System.Drawing.Point(480, 150)
     $script:Form.text = "Powershell NXQL API"
@@ -195,14 +307,14 @@ function Invoke-Form{
     $script:BoxPortal.Multiline = $false
     $script:BoxPortal.Location = New-Object System.Drawing.Size(140, 0) 
     $script:BoxPortal.Size = New-Object System.Drawing.Size(300, 20)
-    $script:BoxPortal.Add_TextChanged({ Invoke-CredentialCleanup })
+    $script:BoxPortal.Add_TextChanged({ Invoke-CredentialCleanup -Portal })
     $script:Form.Controls.Add($script:BoxPortal)
 
     $script:BoxLogin = New-Object System.Windows.Forms.TextBox 
     $script:BoxLogin.Multiline = $false
     $script:BoxLogin.Location = New-Object System.Drawing.Size(140, 30) 
     $script:BoxLogin.Size = New-Object System.Drawing.Size(300, 20)
-    $script:BoxLogin.Add_TextChanged({ Invoke-UsernameChange })
+    $script:BoxLogin.Add_TextChanged({ Invoke-CredentialCleanup })
     $script:Form.Controls.Add($script:BoxLogin)
 
     $script:BoxPassword = New-Object System.Windows.Forms.MaskedTextBox 
@@ -294,30 +406,175 @@ function Invoke-Form{
     $script:ButtonRunQuery.Add_Click({ Invoke-NXQLQueryRun })
     $script:Form.Controls.Add($script:ButtonRunQuery)
 }
+function Invoke-FormEnvironment {
 
+    $EnvSelect = New-Object system.Windows.Forms.Form
+    $EnvSelect.ClientSize = New-Object System.Drawing.Point(390, 100)
+    $EnvSelect.text = "Powershell NXQL API"
+    $EnvSelect.TopMost = $true
+    if ($null -ne (Get-Process powershell)) {
+        $p = (Get-Process powershell | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
+    }
+    if ($null -ne $p) {
+        $EnvSelect.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+    }
+
+    $LabelQuestion = New-Object system.Windows.Forms.Label
+    $LabelQuestion.text = "On which environment do you want to run query?"
+    $LabelQuestion.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+    $LabelQuestion.AutoSize = $true
+    $LabelQuestion.width = 370
+    $LabelQuestion.height = 10
+    $LabelQuestion.location = New-Object System.Drawing.Point(10, 10)
+    $LabelQuestion.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
+    $EnvSelect.Controls.Add($LabelQuestion)
+
+    $ButtonFITS = New-Object System.Windows.Forms.Button
+    $ButtonFITS.Location = New-Object System.Drawing.Point(55, 50)
+    $ButtonFITS.Size = New-Object System.Drawing.Size(80, 30)
+    $ButtonFITS.Text = 'FITS EUCS'
+    $ButtonFITS.Add_Click({
+            $EnvSelect.Add_FormClosing({
+                    $script:Environment = "FITS" })
+            $EnvSelect.Close() })
+    $EnvSelect.Controls.Add($ButtonFITS)
+
+    $ButtonMoJo = New-Object System.Windows.Forms.Button
+    $ButtonMoJo.Location = New-Object System.Drawing.Point(150, 50)
+    $ButtonMoJo.Size = New-Object System.Drawing.Size(80, 30)
+    $ButtonMoJo.Text = 'MoJo'
+    $ButtonMoJo.Add_Click({
+            $EnvSelect.Add_FormClosing({
+                    $script:Environment = "MoJo" })
+            $EnvSelect.Close() })
+    $EnvSelect.Controls.Add($ButtonMoJo)
+
+    $ButtonAll = New-Object System.Windows.Forms.Button
+    $ButtonAll.Location = New-Object System.Drawing.Point(250, 50)
+    $ButtonAll.Size = New-Object System.Drawing.Size(80, 30)
+    $ButtonAll.Text = 'All'
+    $ButtonAll.Add_Click({
+            $EnvSelect.Add_FormClosing({
+                    $script:Environment = "All" })
+            $EnvSelect.Close() })
+    $EnvSelect.Controls.Add($ButtonAll)
+    [void]$EnvSelect.ShowDialog()
+}
+function Invoke-FormMainResize {
+    # Function to change window mode
+    param (
+        [switch]$Big
+    )
+    if ($Big) {
+        $script:Form.TopMost = $false
+        $script:Form.ClientSize = New-Object System.Drawing.Point(700, 600)
+        $script:LabelQuery.Visible = $true
+        $script:BoxQuery.Visible = $true
+        $script:LabelFileName.Visible = $true
+        $script:BoxFileName.Visible = $true
+        $script:LabelPath.Visible = $true
+        $script:BoxPath.Visible = $true
+        $script:ButtonPath.Visible = $true
+        $script:LabelPlatform.Visible = $true
+        $script:CheckboxWindows.Visible = $true
+        $script:CheckboxMac_OS.Visible = $true
+        $script:CheckboxMobile.Visible = $true
+    }
+    else {
+        $script:Form.TopMost = $true
+        $script:Form.ClientSize = New-Object System.Drawing.Point(480, 150)
+        $script:LabelQuery.Visible = $false
+        $script:BoxQuery.Visible = $false
+        $script:LabelFileName.Visible = $false
+        $script:BoxFileName.Visible = $false
+        $script:LabelPath.Visible = $false
+        $script:BoxPath.Visible = $false
+        $script:ButtonPath.Visible = $false
+        $script:LabelPlatform.Visible = $false
+        $script:CheckboxWindows.Visible = $false
+        $script:CheckboxMac_OS.Visible = $false
+        $script:CheckboxMobile.Visible = $false
+        $script:ButtonWebEditor.Visible = $false
+    }
+}
+function Invoke-Buttons {
+    # Function to disable and enable action buttons
+    param (
+        [switch]$Enable
+    )
+    if ($Enable) {
+        $script:ButtonConnect.enabled = $true
+        $script:ButtonRunQuery.enabled = $true
+        $script:ButtonPath.enabled = $true
+        $script:BoxPath.enabled = $true
+        $script:BoxFileName.enabled = $true
+        $script:BoxPort.enabled = $true
+        $script:CheckboxWindows.enabled = $true
+        $script:CheckboxMac_OS.enabled = $true
+        $script:CheckboxMobile.enabled = $true
+    }
+    else {
+        $script:ButtonConnect.enabled = $false
+        $script:ButtonRunQuery.enabled = $false
+        $script:ButtonPath.enabled = $false
+        $script:BoxPath.enabled = $false
+        $script:BoxFileName.enabled = $false
+        $script:BoxPort.enabled = $false
+        $script:CheckboxWindows.enabled = $false
+        $script:CheckboxMac_OS.enabled = $false
+        $script:CheckboxMobile.enabled = $false
+    }
+}
+Function Get-Folder {
+    param(
+        $inputFolder
+    )
+    [Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null
+    [System.Windows.Forms.Application]::EnableVisualStyles()
+    $browse = New-Object System.Windows.Forms.FolderBrowserDialog
+    $browse.SelectedPath = $inputFolder
+    $browse.ShowNewFolderButton = $true
+    $browse.Description = "Select a directory"
+    $loop = $true
+    while ($loop) {
+        if ($browse.ShowDialog() -eq "OK") {
+            $loop = $false
+		
+        }
+        else {
+            return $inputFolder
+        }
+    }
+    $browse.SelectedPath
+    $browse.Dispose()
+    return $FolderBrowserDialog.SelectedPath
+}
 function Invoke-CredentialCleanup {
-    Invoke-FormResize
-    $script:ButtonRunQuery.Visible = $false
-    $script:ButtonWebEditor.Visible = $false
-    $script:LabelConnectionStatus.Visible = $false
-    $script:LabelConnectionStatusDetails.Visible = $false
-    $script:LabelNumberOfEngines.Visible = $false
-    $script:LabelRunStatus.Visible = $false
-    $script:BoxPassword.text = ""
-    $script:BoxLogin.text = ""    
+    param(
+        [switch]$Portal
+    )
+    Invoke-FormMainResize
+    if($Portal){
+        $script:ButtonRunQuery.Visible = $false
+        $script:ButtonWebEditor.Visible = $false
+        $script:LabelConnectionStatus.Visible = $false
+        $script:LabelConnectionStatusDetails.Visible = $false
+        $script:LabelNumberOfEngines.Visible = $false
+        $script:LabelRunStatus.Visible = $false
+        $script:BoxPassword.text = ""
+        $script:BoxLogin.text = ""  
+    }else {
+        $script:ButtonRunQuery.Visible = $false
+        $script:ButtonWebEditor.Visible = $false
+        $script:LabelConnectionStatus.Visible = $false
+        $script:LabelConnectionStatusDetails.Visible = $false
+        $script:LabelNumberOfEngines.Visible = $false
+        $script:LabelRunStatus.Visible = $false
+        $script:BoxPassword.text = ""
+        $script:LabelConnectionStatusDetails.Text = ""
+    }
+  
 }
-function Invoke-UsernameChange {
-    Invoke-FormResize
-    $script:ButtonRunQuery.Visible = $false
-    $script:ButtonWebEditor.Visible = $false
-    $script:LabelConnectionStatus.Visible = $false
-    $script:LabelConnectionStatusDetails.Visible = $false
-    $script:LabelNumberOfEngines.Visible = $false
-    $script:LabelRunStatus.Visible = $false
-    $script:BoxPassword.text = ""
-    $script:LabelConnectionStatusDetails.Text = ""
-}
-
 function Invoke-PortalConnection {
     # Remember password while Button is clicked multiple times without changing anything
     $KeepCredentials = $false
@@ -337,7 +594,7 @@ function Invoke-PortalConnection {
     $script:LabelPort.Visible = $false
     $script:BoxPort.Visible = $false
     # Hide additional fields if button clicked multiple times
-    Invoke-FormResize
+    Invoke-FormMainResize
     # Fill in the first part of output name and format portal connection details
     $script:BoxFileName.Text = (Get-Date).ToString("yyyy-MM-dd")
     $script:LabelConnectionStatus.Text = "Connection state:"
@@ -367,9 +624,10 @@ function Invoke-PortalConnection {
         $script:Credentials = New-Object System.Management.Automation.PSCredential ($Username, $Password)
     }
     $script:BoxPassword.text = "********************"
-    $script:Engines = Get-EngineList -portal $Portal -credentials $script:Credentials
-    # Check if Engine list is not null if yes exit
-    if ($null -eq $Engines) {
+    try {
+        $script:Engines = Get-EngineList -portal $Portal -credentials $script:Credentials
+    }
+    catch {
         $script:LabelConnectionStatusDetails.text = "Not connected"
         $script:LabelConnectionStatusDetails.ForeColor = "red"
         $script:LabelConnectionStatusDetails.Visible = $true
@@ -389,7 +647,7 @@ function Invoke-PortalConnection {
     $script:LabelConnectionStatusDetails.ForeColor = "green"
     $script:LabelNumberOfEngines.text = "Number of engines: $Number_of_engines"
     # Display additional fields
-    Invoke-FormResize -Big
+    Invoke-FormMainResize -Big
     $script:LabelNumberOfEngines.Visible = $true
     $script:ButtonRunQuery.Visible = $true
     # Check environment type SAAS / On-prem
@@ -408,29 +666,62 @@ function Invoke-PortalConnection {
     $script:LabelPort.Visible = $true
     $script:BoxPort.Visible = $true
 }
-Function Get-Folder {
-    param(
-        $inputFolder
+function Invoke-QueryValidation {
+    param (
+        [String]$Query,
+        [Switch]$Ligth
     )
-    [Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null
-    [System.Windows.Forms.Application]::EnableVisualStyles()
-    $browse = New-Object System.Windows.Forms.FolderBrowserDialog
-    $browse.SelectedPath = $inputFolder
-    $browse.ShowNewFolderButton = $true
-    $browse.Description = "Select a directory"
-    $loop = $true
-    while ($loop) {
-        if ($browse.ShowDialog() -eq "OK") {
-            $loop = $false
-		
+    # Check if all opened brackets in query are closed
+    if (($Query.ToCharArray() | Where-Object { $_ -eq '(' } | Measure-Object).Count `
+            -ne `
+        ($Query.ToCharArray() | Where-Object { $_ -eq ')' } | Measure-Object).Count) {
+        if ($Ligth) {
+            return "Some brackets are not closed !"
         }
         else {
-            return $inputFolder
+            return "Failed: Some brackets are not closed !"
         }
     }
-    $browse.SelectedPath
-    $browse.Dispose()
-    return $FolderBrowserDialog.SelectedPath
+    if (($Query.ToCharArray() | Where-Object { $_ -eq '`"' } | Measure-Object).Count `
+            -ne `
+        ($Query.ToCharArray() | Where-Object { $_ -eq '`"' } | Measure-Object).Count) {
+        if ($Ligth) {
+            return "Some quotes are not closed !"
+        }
+        else {
+            return "Failed: Some quotes are not closed !"
+        }
+    }
+    if (($Query.ToCharArray() | Where-Object { $_ -eq "`'" } | Measure-Object).Count `
+            -ne `
+        ($Query.ToCharArray() | Where-Object { $_ -eq "`'" } | Measure-Object).Count) {
+        if ($Ligth) {
+            return "Some quotes are not closed !"
+        }
+        else {
+            return "Failed: Some quotes are not closed !"
+        }
+    }
+    if ($Ligth) {
+        return $null
+    }
+    # Check if query is not empty
+    if ($Query.Length -le 1) {
+        return "Failed: NXQL query can not be blank !"
+    }
+    # Check if select statement exists
+    if (($Query -notlike "*select*")) {
+        return "Failed: There is no `"select`" statement !"
+    }
+    # Check if from statement exists
+    if (($Query -notlike "*from*")) {
+        return "Failed: There is no `"from`" statement !"
+    }
+    # Check if limit statement exists
+    if (($Query -notlike "*limit*")) {
+        return "Failed: There is no `"limit`" statement !"
+    }
+    return $null
 }
 function Invoke-NXQLQueryRun {
     # Update Export status
@@ -523,63 +814,6 @@ function Invoke-NXQLQueryRun {
     }
     Invoke-Buttons -Enable
 }
-function Invoke-QueryValidation {
-    param (
-        [String]$Query,
-        [Switch]$Ligth
-    )
-    # Check if all opened brackets in query are closed
-    if (($Query.ToCharArray() | Where-Object { $_ -eq '(' } | Measure-Object).Count `
-            -ne `
-        ($Query.ToCharArray() | Where-Object { $_ -eq ')' } | Measure-Object).Count) {
-        if ($Ligth) {
-            return "Some brackets are not closed !"
-        }
-        else {
-            return "Failed: Some brackets are not closed !"
-        }
-    }
-    if (($Query.ToCharArray() | Where-Object { $_ -eq '`"' } | Measure-Object).Count `
-            -ne `
-        ($Query.ToCharArray() | Where-Object { $_ -eq '`"' } | Measure-Object).Count) {
-        if ($Ligth) {
-            return "Some quotes are not closed !"
-        }
-        else {
-            return "Failed: Some quotes are not closed !"
-        }
-    }
-    if (($Query.ToCharArray() | Where-Object { $_ -eq "`'" } | Measure-Object).Count `
-            -ne `
-        ($Query.ToCharArray() | Where-Object { $_ -eq "`'" } | Measure-Object).Count) {
-        if ($Ligth) {
-            return "Some quotes are not closed !"
-        }
-        else {
-            return "Failed: Some quotes are not closed !"
-        }
-    }
-    if ($Ligth) {
-        return $null
-    }
-    # Check if query is not empty
-    if ($Query.Length -le 1) {
-        return "Failed: NXQL query can not be blank !"
-    }
-    # Check if select statement exists
-    if (($Query -notlike "*select*")) {
-        return "Failed: There is no `"select`" statement !"
-    }
-    # Check if from statement exists
-    if (($Query -notlike "*from*")) {
-        return "Failed: There is no `"from`" statement !"
-    }
-    # Check if limit statement exists
-    if (($Query -notlike "*limit*")) {
-        return "Failed: There is no `"limit`" statement !"
-    }
-    return $null
-}
 function Invoke-WebQueryEditor {
     # Select one of the engines
     $engine = ($script:Engines | Select-Object -First 1).address
@@ -634,7 +868,7 @@ Hastable
     if ($portal -eq 'ministryofjustice.eu.nexthink.cloud') {
         $FITS = ('engine-1', 'engine-2', 'engine-3', 'engine-4', 'engine-5', 'engine-6', 'engine-7', 'engine-8', 'engine-9')
         $MOJO = ('engine-10', 'engine-11', 'engine-12', 'engine-13', 'engine-14')
-        Invoke-EnvironmentSelection
+        Invoke-FormEnvironment
         if ($script:Environment -eq "FITS") {
             $engineList = $engineList | Where-Object { $_.name -in $FITS }
         }
@@ -643,60 +877,6 @@ Hastable
         }
     }
     return $engineList
-}
-function Invoke-EnvironmentSelection {
-
-    $EnvSelect = New-Object system.Windows.Forms.Form
-    $EnvSelect.ClientSize = New-Object System.Drawing.Point(390, 100)
-    $EnvSelect.text = "Powershell NXQL API"
-    $EnvSelect.TopMost = $true
-    if ($null -ne (Get-Process powershell)) {
-        $p = (Get-Process powershell | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
-    }
-    if ($null -ne $p) {
-        $EnvSelect.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
-    }
-
-    $LabelQuestion = New-Object system.Windows.Forms.Label
-    $LabelQuestion.text = "On which environment do you want to run query?"
-    $LabelQuestion.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-    $LabelQuestion.AutoSize = $true
-    $LabelQuestion.width = 370
-    $LabelQuestion.height = 10
-    $LabelQuestion.location = New-Object System.Drawing.Point(10, 10)
-    $LabelQuestion.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
-    $EnvSelect.Controls.Add($LabelQuestion)
-
-    $ButtonFITS = New-Object System.Windows.Forms.Button
-    $ButtonFITS.Location = New-Object System.Drawing.Point(55, 50)
-    $ButtonFITS.Size = New-Object System.Drawing.Size(80, 30)
-    $ButtonFITS.Text = 'FITS EUCS'
-    $ButtonFITS.Add_Click({
-            $EnvSelect.Add_FormClosing({
-                    $script:Environment = "FITS" })
-            $EnvSelect.Close() })
-    $EnvSelect.Controls.Add($ButtonFITS)
-
-    $ButtonMoJo = New-Object System.Windows.Forms.Button
-    $ButtonMoJo.Location = New-Object System.Drawing.Point(150, 50)
-    $ButtonMoJo.Size = New-Object System.Drawing.Size(80, 30)
-    $ButtonMoJo.Text = 'MoJo'
-    $ButtonMoJo.Add_Click({
-            $EnvSelect.Add_FormClosing({
-                    $script:Environment = "MoJo" })
-            $EnvSelect.Close() })
-    $EnvSelect.Controls.Add($ButtonMoJo)
-
-    $ButtonAll = New-Object System.Windows.Forms.Button
-    $ButtonAll.Location = New-Object System.Drawing.Point(250, 50)
-    $ButtonAll.Size = New-Object System.Drawing.Size(80, 30)
-    $ButtonAll.Text = 'All'
-    $ButtonAll.Add_Click({
-            $EnvSelect.Add_FormClosing({
-                    $script:Environment = "All" })
-            $EnvSelect.Close() })
-    $EnvSelect.Controls.Add($ButtonAll)
-    [void]$EnvSelect.ShowDialog()
 }
 Function Get-NxqlExport {
     param (
@@ -707,7 +887,7 @@ Function Get-NxqlExport {
         [Parameter(Mandatory = $true)]
         $EngineList,
         [Parameter(Mandatory = $false)]
-        [String]$webapiPort,
+        [String]$webapiPort = "443",
         [Parameter(Mandatory = $false)]
         [String[]]$Platform,
         [Parameter(Mandatory = $false)]
@@ -802,9 +982,6 @@ Function Get-NxqlExport {
                 throw
             }
         };
-    }
-    if (! $webapiPort) {
-        $webapiPort = "443"
     }
     if (! $credentials) {
         $credentials = Get-Credential
@@ -945,73 +1122,5 @@ Function Get-NxqlExport {
         return "Failed: Error unknown"
     }
 }
-function Invoke-FormResize {
-    # Function to change window mode
-    param (
-        [switch]$Big
-    )
-    if ($Big) {
-        $script:Form.TopMost = $false
-        $script:Form.ClientSize = New-Object System.Drawing.Point(700, 600)
-        $script:LabelQuery.Visible = $true
-        $script:BoxQuery.Visible = $true
-        $script:LabelFileName.Visible = $true
-        $script:BoxFileName.Visible = $true
-        $script:LabelPath.Visible = $true
-        $script:BoxPath.Visible = $true
-        $script:ButtonPath.Visible = $true
-        $script:LabelPlatform.Visible = $true
-        $script:CheckboxWindows.Visible = $true
-        $script:CheckboxMac_OS.Visible = $true
-        $script:CheckboxMobile.Visible = $true
-    }
-    else {
-        $script:Form.TopMost = $true
-        $script:Form.ClientSize = New-Object System.Drawing.Point(480, 150)
-        $script:LabelQuery.Visible = $false
-        $script:BoxQuery.Visible = $false
-        $script:LabelFileName.Visible = $false
-        $script:BoxFileName.Visible = $false
-        $script:LabelPath.Visible = $false
-        $script:BoxPath.Visible = $false
-        $script:ButtonPath.Visible = $false
-        $script:LabelPlatform.Visible = $false
-        $script:CheckboxWindows.Visible = $false
-        $script:CheckboxMac_OS.Visible = $false
-        $script:CheckboxMobile.Visible = $false
-        $script:ButtonWebEditor.Visible = $false
-    }
-}
-function Invoke-Buttons {
-    # Function to disable and enable action buttons
-    param (
-        [switch]$Enable
-    )
-    if ($Enable) {
-        $script:ButtonConnect.enabled = $true
-        $script:ButtonRunQuery.enabled = $true
-        $script:ButtonPath.enabled = $true
-        $script:BoxPath.enabled = $true
-        $script:BoxFileName.enabled = $true
-        $script:BoxPort.enabled = $true
-        $script:CheckboxWindows.enabled = $true
-        $script:CheckboxMac_OS.enabled = $true
-        $script:CheckboxMobile.enabled = $true
-    }
-    else {
-        $script:ButtonConnect.enabled = $false
-        $script:ButtonRunQuery.enabled = $false
-        $script:ButtonPath.enabled = $false
-        $script:BoxPath.enabled = $false
-        $script:BoxFileName.enabled = $false
-        $script:BoxPort.enabled = $false
-        $script:CheckboxWindows.enabled = $false
-        $script:CheckboxMac_OS.enabled = $false
-        $script:CheckboxMobile.enabled = $false
-    }
-}
-
 
 Invoke-main
-
-#commit to push
