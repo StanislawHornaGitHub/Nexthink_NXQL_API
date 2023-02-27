@@ -28,6 +28,11 @@
                                             Connecting to portal with ENTER key;
                                             More accurate error handling;
                                             Possibility to change user, after establishing connection.
+    
+    2023-02-27      Stanislaw Horna         Better Handling if unable to create neccesary variables;
+                                            Handling for running on unsupported environment;
+                                            Handling for no write permission
+                                            Handling for running multiple apps at the same time
                                             
 #>
 
@@ -41,13 +46,20 @@ function Invoke-GettingStarted {
     $ErrorActionPreference = 'Stop'
     # Loading additional .NET classes
     try {
+        Add-Type -AssemblyName PresentationCore, PresentationFramework
         Add-Type -AssemblyName System.Windows.Forms
         Add-Type -AssemblyName System.Web
         [System.Windows.Forms.Application]::EnableVisualStyles()
     }
     catch {
-        throw 'Currently running environment is not supported'
-        Read-Host ""
+        try {
+            Invoke-FormError -Message "Currently running environment is not supported"
+        }
+        catch {
+            Write-Host "Currently running environment is not supported"
+            Pause
+            throw
+        }
     }
 
     # Creating neccessary variables
@@ -108,20 +120,37 @@ function Invoke-GettingStarted {
         New-Variable -Name 'UniqueInstanceLock' -Value "$LogPath\UniqueInstance" -Scope Script
     }
     
-    # Creating lock file to prevent running multiple instances from the same location
-    
+    # 
     try {
-        New-Item -Path $UniqueInstanceLock
+        if (!(Test-Path -Path $script:LogPath)) {
+            New-Item -Path $script:LogPath -ItemType Directory | Out-Null
+        }
     }
     catch {
-        Invoke-FormError
-        throw 'Another instance is already running'
+        Invoke-FormError -Message "No write permission in the main catalog."
+    }
+
+    # Creating lock file to prevent running multiple instances from the same location
+    try {
+        if(!(Test-Path -Path $script:UniqueInstanceLock)){
+            New-Item -Path $script:UniqueInstanceLock | Out-Null
+        }else {
+            Invoke-FormError -Message "Another instance of this application is already running." 
+        }
+    }
+    catch {
+        Invoke-FormError -Message "No write permission in the main catalog."
     }
 }
 function Invoke-FormError {
-    [System.Windows.MessageBox]::Show('Another instance of this application is already running.','Instance Error','OK','Error')
+    param(
+        [Parameter(Mandatory = $true)]
+        [String]$Message
+    )
+    [System.Windows.MessageBox]::Show($Message, 'Application Error', 'OK', 'Error') | Out-Null
+    throw
 }
-function Invoke-FormMain{
+function Invoke-FormMain {
     $script:Form = New-Object system.Windows.Forms.Form
     $script:Form.ClientSize = New-Object System.Drawing.Point(480, 150)
     $script:Form.text = "Powershell NXQL API"
@@ -131,6 +160,9 @@ function Invoke-FormMain{
         $p = (Get-Process powershell | Select-Object -First 1).Path
         $script:Form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
     }
+    $script:Form.Add_FormClosing({
+            Remove-Item -Path $script:UniqueInstanceLock -Confirm:$false -Force
+        })
 
     ######################################################################
     #-------------------------- Labels Section --------------------------#
@@ -555,7 +587,7 @@ function Invoke-CredentialCleanup {
         [switch]$Portal
     )
     Invoke-FormMainResize
-    if($Portal){
+    if ($Portal) {
         $script:ButtonRunQuery.Visible = $false
         $script:ButtonWebEditor.Visible = $false
         $script:LabelConnectionStatus.Visible = $false
@@ -564,7 +596,8 @@ function Invoke-CredentialCleanup {
         $script:LabelRunStatus.Visible = $false
         $script:BoxPassword.text = ""
         $script:BoxLogin.text = ""  
-    }else {
+    }
+    else {
         $script:ButtonRunQuery.Visible = $false
         $script:ButtonWebEditor.Visible = $false
         $script:LabelConnectionStatus.Visible = $false
@@ -898,100 +931,13 @@ Function Get-NxqlExport {
         [Parameter(Mandatory = $false)]
         [string]$LogPath
     )
-    $Functions = {
-        Add-Type -AssemblyName System.Web
-        Function Invoke-Nxql {
-            <#
-			.SYNOPSIS
-			Sends an NXQL query to a Nexthink engine.
-		
-			.DESCRIPTION
-			 Sends an NXQL query to the Web API of Nexthink Engine as HTTP GET using HTTPS.
-			 
-			.PARAMETER ServerName
-			 Nexthink Engine name or IP address.
-		
-			.PARAMETER PortNumber
-			Port number of the Web API (default 1671).
-		
-			.PARAMETER UserName
-			User name of the Finder account under which the query is executed.
-		
-			.PARAMETER UserPassword
-			User password of the Finder account under which the query is executed.
-		
-			.PARAMETER NxqlQuery
-			NXQL query.
-		
-			.PARAMETER FirstParamter
-			Value of %1 in the NXQL query.
-		
-			.PARAMETER SecondParamter
-			Value of %2 in the NXQL query.
-		
-			.PARAMETER OuputFormat
-			NXQL query output format i.e. csv, xml, html, json (default csv).
-		
-			.PARAMETER Platforms
-			Platforms on which the query applies i.e. windows, mac_os, mobile (default windows).
-			
-			.EXAMPLE
-			Invoke-Nxql -ServerName 176.31.63.200 -UserName "admin" -UserPassword "admin" 
-			-Platforms=windows,mac_os -NxqlQuery "(select (name) (from device))"
-			#>
-            Param(
-                [Parameter(Mandatory = $true)]
-                [string]$ServerName,
-                [Parameter(Mandatory = $true)]
-                [System.Management.Automation.PSCredential]$credentials,
-                [Parameter(Mandatory = $true)]
-                [string]$Query,
-                [Parameter(Mandatory = $false)]
-                [int]$PortNumber = 1671,
-                [Parameter(Mandatory = $false)]
-                [string]$OuputFormat = "csv",
-                [Parameter(Mandatory = $false)]
-                [string[]]$Platforms = "windows",
-                [Parameter(Mandatory = $false)]
-                [string]$FirstParameter,
-                [Parameter(Mandatory = $false)]
-                [string]$SecondParameter
-            )
-            $PlaformsString = ""
-            Foreach ($platform in $Platforms) {
-                $PlaformsString += "&platform={0}" -f $platform
-            }
-            $EncodedNxqlQuery = [System.Web.HttpUtility]::UrlEncode($Query)
-            $Url = "https://{0}:{1}/2/query?query={2}&format={3}{4}" -f $ServerName, $PortNumber, $EncodedNxqlQuery, $OuputFormat, $PlaformsString
-            if ($FirstParameter) { 
-                $EncodedFirstParameter = [System.Web.HttpUtility]::UrlEncode($FirstParameter)
-                $Url = "{0}&p1={1}" -f $Url, $EncodedFirstParameter
-            }
-            if ($SecondParameter) { 
-                $EncodedSecondParameter = [System.Web.HttpUtility]::UrlEncode($SecondParameter)
-                $Url = "{0}&p2={1}" -f $Url, $EncodedSecondParameter
-            }
-            #echo $Url
-            try {
-                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11
-                [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true } 
-                $webclient = New-Object system.net.webclient
-                $webclient.Credentials = New-Object System.Net.NetworkCredential($Credentials.UserName, $credentials.GetNetworkCredential().Password)
-                $webclient.DownloadString($Url)
-            }
-            catch {
-                throw
-            }
-        };
-    }
-    if (! $credentials) {
+    if (!$credentials) {
         $credentials = Get-Credential
     }
     if (!$EngineList) {
         $portal = Read-Host "Enter Portal DNS name"
         $EngineList = Get-EngineList -portal $portal -credentials $credentials
     }
-
     if (Test-Path -Path "$SyncPath\Headers") {
         Remove-Item -Path "$SyncPath\Headers" -Confirm:$false -Force
     }
@@ -1009,7 +955,7 @@ Function Get-NxqlExport {
         $Name = "NXQL-" + $Engine.name
         $RandomWaitTime = Get-Random -Minimum 0 -Maximum 500
         Start-Job -Name $Name `
-            -InitializationScript $Functions `
+            -InitializationScript { Import-Module .\main\Job-Functions.psm1 } `
             -ScriptBlock {
             param(
                 $EngineAddress,

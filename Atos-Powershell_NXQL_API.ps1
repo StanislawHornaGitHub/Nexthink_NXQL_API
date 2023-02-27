@@ -28,30 +28,57 @@
                                             Connecting to portal with ENTER key;
                                             More accurate error handling;
                                             Possibility to change user, after establishing connection.
+    
+    2023-02-27      Stanislaw Horna         Better Handling if unable to create neccesary variables;
+                                            Handling for running on unsupported environment;
+                                            Handling for no write permission
+                                            Handling for running multiple apps at the same time
                                             
 #>
+
 $ErrorActionPreference = 'Stop'
 
-function Invoke-main{
+function Invoke-main {
     Invoke-FilesVerification
+    Invoke-AdditionalClasses
     try {
         PowerShell.exe -WindowStyle hidden ./main/NXQL-main.ps1
     }
     catch {
-        throw 'Not able to run application'
-        Read-Host "Press any key to close this window"
+        Write-Host "Not able to run application"
+        Pause
+        throw
     }
 }
-
 function Invoke-FilesVerification {
     if (!(Test-Path -Path ./main)) {
-        throw 'Some catalogs are missing'
-        Read-Host "Press any key to close this window"
+        Write-Host "Some catalogs are missing"
+        Pause
+        throw
     }
-    if(!(Test-Path -Path ./main/NXQL-main.ps1)){
-        throw 'Main application file is missing'
-        Read-Host "Press any key to close this window"
-    }    
+    if (!(Test-Path -Path ./main/NXQL-main.ps1)) {
+        Write-Host "Main application files are missing"
+        Pause
+        throw
+    }
+    if (!(Test-Path -Path ./main/Job-Functions.psm1)) {
+        Write-Host "Main application files are missing"
+        Pause
+        throw
+    }        
+}
+function Invoke-AdditionalClasses {
+    try {
+        Add-Type -AssemblyName PresentationCore, PresentationFramework
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Web
+        [System.Windows.Forms.Application]::EnableVisualStyles()
+    }
+    catch {
+        Write-Host "Currently running environment is not supported"
+        Pause
+        throw
+    }
 }
 
 Invoke-main
