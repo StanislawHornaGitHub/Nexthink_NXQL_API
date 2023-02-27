@@ -47,6 +47,7 @@ function Invoke-GettingStarted {
     }
     catch {
         throw 'Currently running environment is not supported'
+        Read-Host ""
     }
 
     # Creating neccessary variables
