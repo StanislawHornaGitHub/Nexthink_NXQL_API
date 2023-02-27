@@ -17,7 +17,7 @@
     Merged Nexthink engines output
 
 ## NOTES
-    Version:            1.0
+    Version:            1.03
     Author:             Stanislaw Horna
     Mail:               stanislaw.horna@atos.net
     Creation Date:      16-Feb-2023
