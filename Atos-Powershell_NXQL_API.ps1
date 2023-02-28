@@ -17,7 +17,7 @@
     Merged Nexthink engines output
 
 .NOTES
-    Version:            1.03
+    Version:            1.04
     Author:             Stanislaw Horna
     Mail:               stanislaw.horna@atos.net
     Creation Date:      16-Feb-2023
@@ -37,6 +37,9 @@
                                             Handling for running on unsupported environment;
                                             Handling for no write permission;
                                             Handling for running multiple apps at the same time.
+
+    2023-02-28      Stanislaw Horna         Error Handling for invalid query - 
+                                            returns the same message as NXQL WebEditor.
                                             
 #>
 
@@ -65,11 +68,6 @@ function Invoke-FilesVerification {
         Pause
         throw
     }
-    if (!(Test-Path -Path ./main/Job-Functions.psm1)) {
-        Write-Host "Main application files are missing"
-        Pause
-        throw
-    }        
 }
 function Invoke-AdditionalClasses {
     try {

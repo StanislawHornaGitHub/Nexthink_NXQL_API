@@ -17,7 +17,7 @@
     Merged Nexthink engines output
 
 .NOTES
-    Version:            1.03
+    Version:            1.04
     Author:             Stanislaw Horna
     Mail:               stanislaw.horna@atos.net
     Creation Date:      16-Feb-2023
@@ -37,6 +37,9 @@
                                             Handling for running on unsupported environment;
                                             Handling for no write permission;
                                             Handling for running multiple apps at the same time.
+
+    2023-02-28      Stanislaw Horna         Error Handling for invalid query - 
+                                            returns the same message as NXQL WebEditor.
                                             
 #>
 
@@ -51,99 +54,74 @@ function Invoke-GettingStarted {
     # Loading additional .NET classes
     try {
         Add-Type -AssemblyName PresentationCore, PresentationFramework
+    }
+    catch {
+        Write-Host "Currently running environment is not supported"
+        Pause
+        throw
+    }
+
+    try {
         Add-Type -AssemblyName System.Windows.Forms
         Add-Type -AssemblyName System.Web
         [System.Windows.Forms.Application]::EnableVisualStyles()
     }
     catch {
-        try {
-            Invoke-FormError -Message "Currently running environment is not supported"
-        }
-        catch {
-            Write-Host "Currently running environment is not supported"
-            Pause
-            throw
-        }
+        Invoke-FormError -Message "Currently running environment is not supported"
     }
 
     # Creating neccessary variables
     try {
         New-Variable -Name 'Engines' -Value @() -Scope Script
-    }
-    catch {
-        Remove-Variable -Name 'Engines' -Force
-        New-Variable -Name 'Engines' -Value @() -Scope Script
-    }
-    try {
         New-Variable -Name 'Credentials' -value "-" -Scope Script
-    }
-    catch {
-        Remove-Variable -Name 'Credentials' -Force
-        New-Variable -Name 'Credentials' -value "-" -Scope Script
-    }
-    try {
         New-Variable -Name 'PortalFQDN' -value "-" -Scope Script
-    }
-    catch {
-        Remove-Variable -Name 'PortalFQDN' -Force
-        New-Variable -Name 'PortalFQDN' -value "-" -Scope Script
-    }
-    try {
         New-Variable -Name 'Login' -Value "-" -Scope Script
-    }
-    catch {
-        Remove-Variable -Name 'Login' -Force
-        New-Variable -Name 'Login' -Value "-" -Scope Script
-    }
-    try {
         New-Variable -Name 'Environment' -Value "-" -Scope Script
-    }
-    catch {
-        Remove-Variable -Name 'Environment' -Force -Confirm:$false
-        New-Variable -Name 'Environment' -Value "-" -Scope Script
-    }
-    try {
-        New-Variable -Name 'LogPath' -Value "$((Get-Location).Path)/Logs" -Scope Script
-    }
-    catch {
-        Remove-Variable -Name 'LogPath' -Force
-        New-Variable -Name 'LogPath' -Value "$((Get-Location).Path)/Logs" -Scope Script
-    }
-    try {
         New-Variable -Name 'Platform' -Value @() -Scope Script
     }
-    catch {
-        Remove-Variable -Name 'Platform' -Force -Confirm:$false
-        New-Variable -Name 'Platform' -Value @() -Scope Script
+    catch {}
+
+    # Handling if someone open directly NXQL-main.ps1
+    if ((Get-Location).Path -like "*\main") {
+        try {
+            New-Variable -Name 'LogPath' -Value "$((Get-Location).Path)\Logs" -Scope Script
+        }
+        catch {}
     }
+    else {
+        try {
+            New-Variable -Name 'LogPath' -Value "$((Get-Location).Path)\main\Logs" -Scope Script
+        }
+        catch {}
+    }
+
     try {
         New-Variable -Name 'UniqueInstanceLock' -Value "$LogPath\UniqueInstance" -Scope Script
     }
-    catch {
-        Remove-Variable -Name 'UniqueInstanceLock' -Force -Confirm:$false
-        New-Variable -Name 'UniqueInstanceLock' -Value "$LogPath\UniqueInstance" -Scope Script
-    }
+    catch {}
     
-    # 
-    try {
-        if (!(Test-Path -Path $script:LogPath)) {
+    # Create Log directory
+    if (!(Test-Path -Path $script:LogPath)) {
+        try {
             New-Item -Path $script:LogPath -ItemType Directory | Out-Null
         }
-    }
-    catch {
-        Invoke-FormError -Message "No write permission in the main catalog."
+        catch {
+            Invoke-FormError -Message "No write permission in the main catalog."
+        }
     }
 
     # Creating lock file to prevent running multiple instances from the same location
-    try {
-        if(!(Test-Path -Path $script:UniqueInstanceLock)){
+    if (!(Test-Path -Path $script:UniqueInstanceLock)) {
+        try {
             New-Item -Path $script:UniqueInstanceLock | Out-Null
-        }else {
-            Invoke-FormError -Message "Another instance of this application is already running." 
         }
+        catch {
+            Invoke-FormError -Message "No write permission in the main catalog."
+        }
+        
     }
-    catch {
-        Invoke-FormError -Message "No write permission in the main catalog."
+    else {
+        Invoke-FormError -Message "Another instance of this application is already running."
     }
 }
 function Invoke-FormError {
@@ -158,10 +136,15 @@ function Invoke-FormMain {
     $script:Form = New-Object system.Windows.Forms.Form
     $script:Form.ClientSize = New-Object System.Drawing.Point(480, 150)
     $script:Form.text = "Powershell NXQL API"
+    $script:Form.FormBorderStyle = 'FixedDialog'
     $script:Form.TopMost = $true
     # Handling if opened via Powershell ISE
-    if ($null -ne (Get-Process powershell)) {
-        $p = (Get-Process powershell | Select-Object -First 1).Path
+    try {
+        $p = (Get-Process powershell | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
+        $script:Form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+    }
+    catch {
+        $p = (Get-Process explorer | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
         $script:Form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
     }
     $script:Form.Add_FormClosing({
@@ -272,9 +255,11 @@ function Invoke-FormMain {
     $script:LabelRunStatus = New-Object System.Windows.Forms.Label
     $script:LabelRunStatus.Text = ""
     $script:LabelRunStatus.AutoSize = $true
+    $script:LabelRunStatus.TextAlign = "MiddleCenter"
+    $script:LabelRunStatus.MaximumSize = New-Object System.Drawing.Size(435, 60)
     $script:LabelRunStatus.width = 25
     $script:LabelRunStatus.height = 10
-    $script:LabelRunStatus.location = New-Object System.Drawing.Point(150, 545)
+    $script:LabelRunStatus.location = New-Object System.Drawing.Point(150, 540)
     $script:LabelRunStatus.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 10, [System.Drawing.FontStyle]::Bold)
     $script:LabelRunStatus.Visible = $false
     $script:Form.Controls.Add($script:LabelRunStatus)
@@ -332,7 +317,6 @@ function Invoke-FormMain {
             else {
                 $script:BoxPassword.passwordchar = "*"
             }
-        
         })
     $script:Form.Controls.Add($script:CheckboxShowPassword)
 
@@ -396,7 +380,13 @@ function Invoke-FormMain {
     $script:BoxPath.Multiline = $false
     $script:BoxPath.Location = New-Object System.Drawing.Size(150, 510) 
     $script:BoxPath.Size = New-Object System.Drawing.Size(430, 20)
-    $script:BoxPath.Text = (Get-Location).Path
+    if ((Get-Location).Path -like "*main") {
+        $path = (Get-Location).Path.Split("\")[0..((Get-Location).Path.Split("\").count - 2)] -join "\"
+    }
+    else {
+        $path = (Get-Location).Path
+    }
+    $script:BoxPath.Text = $path
     $script:BoxPath.Visible = $false
     $script:Form.Controls.Add($script:BoxPath)
 
@@ -449,10 +439,13 @@ function Invoke-FormEnvironment {
     $EnvSelect.ClientSize = New-Object System.Drawing.Point(390, 100)
     $EnvSelect.text = "Powershell NXQL API"
     $EnvSelect.TopMost = $true
-    if ($null -ne (Get-Process powershell)) {
+    $EnvSelect.FormBorderStyle = 'FixedDialog'
+    try {
         $p = (Get-Process powershell | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
+        $EnvSelect.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
     }
-    if ($null -ne $p) {
+    catch {
+        $p = (Get-Process explorer | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
         $EnvSelect.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
     }
 
@@ -695,9 +688,9 @@ function Invoke-PortalConnection {
         $script:BoxFileName.Text += " - <Customer_Name> - "
     }
     else {
-        $CustomerName = $script:BoxPortal.Text.Split(".")[0]
+        $script:CustomerName = $script:BoxPortal.Text.Split(".")[0]
         $script:BoxPort.Text = "443"
-        $script:BoxFileName.Text += " - $CustomerName - "
+        $script:BoxFileName.Text += " - $script:CustomerName - "
     }
     # Display additional components of the GUI
     $script:ButtonWebEditor.Visible = $true
@@ -718,26 +711,6 @@ function Invoke-QueryValidation {
         }
         else {
             return "Failed: Some brackets are not closed !"
-        }
-    }
-    if (($Query.ToCharArray() | Where-Object { $_ -eq '`"' } | Measure-Object).Count `
-            -ne `
-        ($Query.ToCharArray() | Where-Object { $_ -eq '`"' } | Measure-Object).Count) {
-        if ($Ligth) {
-            return "Some quotes are not closed !"
-        }
-        else {
-            return "Failed: Some quotes are not closed !"
-        }
-    }
-    if (($Query.ToCharArray() | Where-Object { $_ -eq "`'" } | Measure-Object).Count `
-            -ne `
-        ($Query.ToCharArray() | Where-Object { $_ -eq "`'" } | Measure-Object).Count) {
-        if ($Ligth) {
-            return "Some quotes are not closed !"
-        }
-        else {
-            return "Failed: Some quotes are not closed !"
         }
     }
     if ($Ligth) {
@@ -844,11 +817,14 @@ function Invoke-NXQLQueryRun {
         $script:LabelRunStatus.Visible = $true
         $script:LabelRunStatus.ForeColor = "green"
         $script:LabelRunStatus.Text = $result
+        Invoke-Popup -title "NXQL Export" -description "NXQL Export for $script:CustomerName is ready!"
     }
     else {
         $script:LabelRunStatus.Visible = $true
         $script:LabelRunStatus.ForeColor = "red"
         $script:LabelRunStatus.Text = $result
+        $result = $result.Split(":")
+        Invoke-Popup -title "FAIL NXQL Export" -description "NXQL Export for $script:CustomerName failed with error: $result"
     }
     Invoke-Buttons -Enable
 }
@@ -935,6 +911,97 @@ Function Get-NxqlExport {
         [Parameter(Mandatory = $false)]
         [string]$LogPath
     )
+    $Function = {
+        Add-Type -AssemblyName System.Web
+        Function Invoke-Nxql {
+            <#
+            .SYNOPSIS
+            Sends an NXQL query to a Nexthink engine.
+        
+            .DESCRIPTION
+             Sends an NXQL query to the Web API of Nexthink Engine as HTTP GET using HTTPS.
+             
+            .PARAMETER ServerName
+             Nexthink Engine name or IP address.
+        
+            .PARAMETER PortNumber
+            Port number of the Web API (default 1671).
+        
+            .PARAMETER UserName
+            User name of the Finder account under which the query is executed.
+        
+            .PARAMETER UserPassword
+            User password of the Finder account under which the query is executed.
+        
+            .PARAMETER NxqlQuery
+            NXQL query.
+        
+            .PARAMETER FirstParamter
+            Value of %1 in the NXQL query.
+        
+            .PARAMETER SecondParamter
+            Value of %2 in the NXQL query.
+        
+            .PARAMETER OuputFormat
+            NXQL query output format i.e. csv, xml, html, json (default csv).
+        
+            .PARAMETER Platforms
+            Platforms on which the query applies i.e. windows, mac_os, mobile (default windows).
+            
+            .EXAMPLE
+            Invoke-Nxql -ServerName 176.31.63.200 -UserName "admin" -UserPassword "admin" 
+            -Platforms=windows,mac_os -NxqlQuery "(select (name) (from device))"
+            #>
+            Param(
+                [Parameter(Mandatory = $true)]
+                [string]$ServerName,
+                [Parameter(Mandatory = $true)]
+                [System.Management.Automation.PSCredential]$credentials,
+                [Parameter(Mandatory = $true)]
+                [string]$Query,
+                [Parameter(Mandatory = $false)]
+                [int]$PortNumber = 1671,
+                [Parameter(Mandatory = $false)]
+                [string]$OuputFormat = "csv",
+                [Parameter(Mandatory = $false)]
+                [string[]]$Platforms = "windows",
+                [Parameter(Mandatory = $false)]
+                [string]$FirstParameter,
+                [Parameter(Mandatory = $false)]
+                [string]$SecondParameter
+            )
+            $PlaformsString = ""
+            Foreach ($platform in $Platforms) {
+                $PlaformsString += "&platform={0}" -f $platform
+            }
+            $EncodedNxqlQuery = [System.Web.HttpUtility]::UrlEncode($Query)
+            $Url = "https://{0}:{1}/2/query?query={2}&format={3}{4}" -f $ServerName, $PortNumber, $EncodedNxqlQuery, $OuputFormat, $PlaformsString
+            if ($FirstParameter) { 
+                $EncodedFirstParameter = [System.Web.HttpUtility]::UrlEncode($FirstParameter)
+                $Url = "{0}&p1={1}" -f $Url, $EncodedFirstParameter
+            }
+            if ($SecondParameter) { 
+                $EncodedSecondParameter = [System.Web.HttpUtility]::UrlEncode($SecondParameter)
+                $Url = "{0}&p2={1}" -f $Url, $EncodedSecondParameter
+            }
+            #echo $Url
+            try {
+                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11
+                [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true } 
+                $webclient = New-Object system.net.webclient
+                $webclient.Credentials = New-Object System.Net.NetworkCredential($Credentials.UserName, $credentials.GetNetworkCredential().Password)
+                $webclient.DownloadString($Url)
+            }
+            catch [System.Net.WebException] {
+                $streamReader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
+                $responseContent = $streamReader.ReadToEnd()
+                $streamReader.Dispose()
+                $HTML = New-Object -Com "HTMLFile"
+                $HTML.IHTMLDocument2_write($responseContent)
+                throw ($html.getElementById("error_message").IHTMLElement_innerText)
+            }
+        }
+    }
     if (!$credentials) {
         $credentials = Get-Credential
     }
@@ -954,12 +1021,15 @@ Function Get-NxqlExport {
             Remove-Item -Path $file -Confirm:$false -Force
         }
     }
+    if (Test-Path -Path "$LogPath\BadRequest") {
+        Remove-Item -Path "$LogPath\BadRequest" -Confirm:$false -Force
+    }
     # Create separate process for each engine in scope
     foreach ($Engine in $EngineList) {
         $Name = "NXQL-" + $Engine.name
         $RandomWaitTime = Get-Random -Minimum 0 -Maximum 500
         Start-Job -Name $Name `
-            -InitializationScript { Import-Module .\main\Job-Functions.psm1 } `
+            -InitializationScript $Function `
             -ScriptBlock {
             param(
                 $EngineAddress,
@@ -985,8 +1055,8 @@ Function Get-NxqlExport {
                     -Platforms $Platform
             }
             catch {
-                $_.Exception | Out-File "$LogPath\Log-$EngineAddress.csv" -Append
-                "Probably bad query" | Out-File "$LogPath\BadRequest"
+                $_.Exception.Message | Out-File "$LogPath\Log-$EngineAddress.csv" -Append
+                $_.Exception.Message | Out-File "$LogPath\BadRequest"
                 throw "Not able to collect data"
             }
             # Split to be able to remove unnecesary headers
@@ -1067,11 +1137,60 @@ Function Get-NxqlExport {
         return "Success!"
     }
     elseif (Test-Path "$LogPath\BadRequest") {
-        return "Failed: Invalid NXQL query"
+        $ErrorMessage = Get-Content -Path "$LogPath\BadRequest"
+        return $ErrorMessage
     }
     else {
         return "Failed: Error unknown"
     }
 }
+Function Invoke-Popup {
+    <#
+.SYNOPSIS
+Display windows 10 pop-up message
 
+.DESCRIPTION
+Display Windows 10 pop-up message based on the title and description provided
+Powershell icon will be visible in the pop-up
+
+.PARAMETER title
+Message title 1 line
+
+.PARAMETER description
+Message description multiple lines
+
+.EXAMPLE
+Invoke-Popup -title "Report "ready" `
+			 -description "Automatically created report is ready"
+
+
+.INPUTS
+String
+
+.OUTPUTS
+None
+
+.NOTES
+    Author:  Stanislaw Horna
+#>
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $title,
+        [Parameter(Mandatory = $true)]
+        [String] $description
+    )
+    $global:endmsg = New-Object System.Windows.Forms.Notifyicon
+    $endmsg.BalloonTipTitle = $title
+    $endmsg.BalloonTipText = $description
+    $endmsg.Visible = $true
+    try {
+        $p = (Get-Process powershell | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
+        $endmsg.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+    }
+    catch {
+        $p = (Get-Process explorer | Sort-Object -Property CPU -Descending | Select-Object -First 1).Path
+        $endmsg.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+    }
+    $endmsg.ShowBalloonTip(10)
+}
 Invoke-main
