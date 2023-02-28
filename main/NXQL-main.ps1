@@ -1303,6 +1303,7 @@ Function Invoke-Nxql {
         $streamReader.Dispose()
         $HTML = New-Object -Com "HTMLFile"
         $HTML.IHTMLDocument2_write($responseContent)
+        
         throw ($html.getElementById("error_message").IHTMLElement_innerText)
     }
     catch {
