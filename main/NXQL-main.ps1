@@ -949,7 +949,7 @@ Function Get-NxqlExport {
         Remove-Item -Path "$SyncPath\Wait" -Confirm:$false -Force
     }
     if (Test-Path -Path $LogPath) {
-        $LogsToDelete = (Get-ChildItem -Path $LogPath).FullName
+        $LogsToDelete = (Get-ChildItem -Path $LogPath -Filter *.csv).FullName
         foreach ($file in $LogsToDelete) {
             Remove-Item -Path $file -Confirm:$false -Force
         }
