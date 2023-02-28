@@ -285,6 +285,20 @@ function Invoke-FormMain {
     $script:CheckboxWindows.checked = $true
     $script:CheckboxWindows.Visible = $false
     $script:CheckboxWindows.TabIndex = 4
+    $script:CheckboxWindows.Add_Click({
+            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
+            if ($script:LabelRunStatus.Text -eq "Proccessing...") {
+                return
+            }
+            if (($null -ne $Status)) {
+                $script:LabelRunStatus.Visible = $true
+                $script:LabelRunStatus.ForeColor = "red"
+                $script:LabelRunStatus.Text = $Status
+            }
+            else {
+                $script:LabelRunStatus.Visible = $false
+            }
+        })
     $script:Form.Controls.Add($script:CheckboxWindows)
 
     $script:CheckboxMac_OS = New-Object System.Windows.Forms.Checkbox 
@@ -293,6 +307,20 @@ function Invoke-FormMain {
     $script:CheckboxMac_OS.Text = "Mac OS"
     $script:CheckboxMac_OS.Visible = $false
     $script:CheckboxMac_OS.TabIndex = 4
+    $script:CheckboxMac_OS.Add_Click({
+            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
+            if ($script:LabelRunStatus.Text -eq "Proccessing...") {
+                return
+            }
+            if (($null -ne $Status)) {
+                $script:LabelRunStatus.Visible = $true
+                $script:LabelRunStatus.ForeColor = "red"
+                $script:LabelRunStatus.Text = $Status
+            }
+            else {
+                $script:LabelRunStatus.Visible = $false
+            }
+        })
     $script:Form.Controls.Add($script:CheckboxMac_OS)
 
     $script:CheckboxMobile = New-Object System.Windows.Forms.Checkbox 
@@ -301,6 +329,20 @@ function Invoke-FormMain {
     $script:CheckboxMobile.Text = "Mobile"
     $script:CheckboxMobile.Visible = $false
     $script:CheckboxMobile.TabIndex = 4
+    $script:CheckboxMobile.Add_Click({
+            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
+            if ($script:LabelRunStatus.Text -eq "Proccessing...") {
+                return
+            }
+            if (($null -ne $Status)) {
+                $script:LabelRunStatus.Visible = $true
+                $script:LabelRunStatus.ForeColor = "red"
+                $script:LabelRunStatus.Text = $Status
+            }
+            else {
+                $script:LabelRunStatus.Visible = $false
+            }
+        })
     $script:Form.Controls.Add($script:CheckboxMobile)
 
     $script:CheckboxShowPassword = New-Object System.Windows.Forms.Checkbox 
@@ -353,7 +395,7 @@ function Invoke-FormMain {
     $script:BoxQuery.Visible = $false
     $script:BoxQuery.Add_TextChanged({
             # Invoke Basic Query validation
-            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text -Ligth
+            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
             if ($script:LabelRunStatus.Text -eq "Proccessing...") {
                 return
             }
@@ -702,6 +744,9 @@ function Invoke-QueryValidation {
         [String]$Query,
         [Switch]$Ligth
     )
+    if ($Query.Length -le 19) {
+        return $null
+    }
     # Check if all opened brackets in query are closed
     if (($Query.ToCharArray() | Where-Object { $_ -eq '(' } | Measure-Object).Count `
             -ne `
@@ -730,7 +775,33 @@ function Invoke-QueryValidation {
     }
     # Check if limit statement exists
     if (($Query -notlike "*limit*")) {
-        return "Failed: There is no `"limit`" statement !"
+        return "Failed: There is no `"limit`" statement at the end of the query!"
+    }
+    # Check Platform
+    $Platform = @()
+    if ($script:CheckboxWindows.checked) {
+        $Platform += "windows"
+    }
+    if ($script:CheckboxMac_OS.checked) {
+        $Platform += "mac_os"
+    }
+    if ($script:CheckboxMobile.checked) {
+        $Platform += "mobile"
+    }
+    [String]$Query = $script:BoxQuery.Text
+    $Query = $Query -replace "\(limit [0-9]+\)", "(limit 1)"
+    $Engine = ($script:Engines | Select-Object -First 1).address
+    $WebAPIPort = $script:BoxPort.text
+    try {
+        Invoke-Nxql `
+            -ServerName $Engine `
+            -PortNumber $WebAPIPort `
+            -credentials $script:Credentials `
+            -Query $Query `
+            -Platforms $Platform | Out-Null
+    }
+    catch {
+        return $_.Exception.Message
     }
     return $null
 }
@@ -1000,6 +1071,9 @@ Function Get-NxqlExport {
                 $HTML.IHTMLDocument2_write($responseContent)
                 throw ($html.getElementById("error_message").IHTMLElement_innerText)
             }
+            catch {
+                throw 'Not able to retriev data'
+            }
         }
     }
     if (!$credentials) {
@@ -1142,6 +1216,97 @@ Function Get-NxqlExport {
     }
     else {
         return "Failed: Error unknown"
+    }
+}
+Function Invoke-Nxql {
+    <#
+    .SYNOPSIS
+    Sends an NXQL query to a Nexthink engine.
+
+    .DESCRIPTION
+     Sends an NXQL query to the Web API of Nexthink Engine as HTTP GET using HTTPS.
+     
+    .PARAMETER ServerName
+     Nexthink Engine name or IP address.
+
+    .PARAMETER PortNumber
+    Port number of the Web API (default 1671).
+
+    .PARAMETER UserName
+    User name of the Finder account under which the query is executed.
+
+    .PARAMETER UserPassword
+    User password of the Finder account under which the query is executed.
+
+    .PARAMETER NxqlQuery
+    NXQL query.
+
+    .PARAMETER FirstParamter
+    Value of %1 in the NXQL query.
+
+    .PARAMETER SecondParamter
+    Value of %2 in the NXQL query.
+
+    .PARAMETER OuputFormat
+    NXQL query output format i.e. csv, xml, html, json (default csv).
+
+    .PARAMETER Platforms
+    Platforms on which the query applies i.e. windows, mac_os, mobile (default windows).
+    
+    .EXAMPLE
+    Invoke-Nxql -ServerName 176.31.63.200 -UserName "admin" -UserPassword "admin" 
+    -Platforms=windows,mac_os -NxqlQuery "(select (name) (from device))"
+    #>
+    Param(
+        [Parameter(Mandatory = $true)]
+        [string]$ServerName,
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.PSCredential]$credentials,
+        [Parameter(Mandatory = $true)]
+        [string]$Query,
+        [Parameter(Mandatory = $false)]
+        [int]$PortNumber = 1671,
+        [Parameter(Mandatory = $false)]
+        [string]$OuputFormat = "csv",
+        [Parameter(Mandatory = $false)]
+        [string[]]$Platforms = "windows",
+        [Parameter(Mandatory = $false)]
+        [string]$FirstParameter,
+        [Parameter(Mandatory = $false)]
+        [string]$SecondParameter
+    )
+    $PlaformsString = ""
+    Foreach ($platform in $Platforms) {
+        $PlaformsString += "&platform={0}" -f $platform
+    }
+    $EncodedNxqlQuery = [System.Web.HttpUtility]::UrlEncode($Query)
+    $Url = "https://{0}:{1}/2/query?query={2}&format={3}{4}" -f $ServerName, $PortNumber, $EncodedNxqlQuery, $OuputFormat, $PlaformsString
+    if ($FirstParameter) { 
+        $EncodedFirstParameter = [System.Web.HttpUtility]::UrlEncode($FirstParameter)
+        $Url = "{0}&p1={1}" -f $Url, $EncodedFirstParameter
+    }
+    if ($SecondParameter) { 
+        $EncodedSecondParameter = [System.Web.HttpUtility]::UrlEncode($SecondParameter)
+        $Url = "{0}&p2={1}" -f $Url, $EncodedSecondParameter
+    }
+    #echo $Url
+    try {
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11
+        [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true } 
+        $webclient = New-Object system.net.webclient
+        $webclient.Credentials = New-Object System.Net.NetworkCredential($Credentials.UserName, $credentials.GetNetworkCredential().Password)
+        $webclient.DownloadString($Url)
+    }
+    catch [System.Net.WebException] {
+        $streamReader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
+        $responseContent = $streamReader.ReadToEnd()
+        $streamReader.Dispose()
+        $HTML = New-Object -Com "HTMLFile"
+        $HTML.IHTMLDocument2_write($responseContent)
+        throw ($html.getElementById("error_message").IHTMLElement_innerText)
+    }
+    catch {
+        throw 'Not able to retriev data'
     }
 }
 Function Invoke-Popup {
