@@ -40,3 +40,6 @@
 
     2023-02-28      Stanislaw Horna         Error Handling for invalid query - 
                                             returns the same message as NXQL WebEditor.
+
+## To-Do
+    1. Handling if "Custom field" column name is incorrect.

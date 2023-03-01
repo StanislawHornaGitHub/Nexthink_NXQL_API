@@ -727,16 +727,18 @@ Function Invoke-ButtonSelectPath {
     return 
 }
 function Invoke-ButtonValidateQuery {
-    Invoke-FormMainResize -Big 
     $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
     if ($null -ne $Status) {
-        Write-Host $Status
         $script:LabelRunStatus.Visible = $true
         $script:LabelRunStatus.ForeColor = "red"
         $script:LabelRunStatus.Text = $Status.'Error message'
         if (($Status.'Error Options').count -ne 0) {
-            Write-Host $Status.'Error Options'
             Invoke-QueryOptions
+        }
+        else {
+            $script:LabelRunStatus.Visible = $false
+            $script:LabelRunStatus.ForeColor = "black"
+            Invoke-FormMainResize -Big
         }
     }
     else {
@@ -884,12 +886,10 @@ function Invoke-BoxQuery {
         $script:LabelRunStatus.ForeColor = "red"
         $script:LabelRunStatus.Text = $Status.'Error message'
     }
-    else {
-        $script:LabelLookup.visible = $false
-        $script:BoxLookfor.visible = $false
-        $script:BoxErrorOptions.visible = $false
-        $script:LabelRunStatus.Visible = $false
-    }
+}
+function Invoke-BoxLookFor {
+
+    
 }
 function Get-BoxPathLocation {
     if ((Get-Location).Path -like "*main") {
@@ -1147,7 +1147,8 @@ function Invoke-QueryOptions {
     $script:LabelLookup.visible = $true
     $script:BoxLookfor.visible = $true
     $script:BoxErrorOptions.visible = $true
-    $script:BoxErrorOptions.Text = ($script:ErrorInformation."Error Options")
+    $ErrorOptions = (($script:ErrorInformation."Error Options").Split("`n") | Select-Object -Skip 1) -join "`n" 
+    $script:BoxErrorOptions.Text = $ErrorOptions
 }
 Function Get-NxqlExport {
     param (
