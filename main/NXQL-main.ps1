@@ -526,7 +526,6 @@ function Invoke-FormMain {
                 $script:BoxLookfor.visible = $false
                 $script:BoxErrorOptions.visible = $false
                 $script:LabelRunStatus.Visible = $false
-                $script:ButtonShowOptions.visible = $false
                 $script:ButtonValidateQuery.visible = $false
                 $script:ButtonRunQuery.visible = $true
             }
