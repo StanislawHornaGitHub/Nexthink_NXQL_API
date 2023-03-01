@@ -78,6 +78,7 @@ function Invoke-GettingStarted {
         New-Variable -Name 'Login' -Value "-" -Scope Script
         New-Variable -Name 'Environment' -Value "-" -Scope Script
         New-Variable -Name 'Platform' -Value @() -Scope Script
+        New-Variable -Name 'ErrorInformation' -Value @{} -Scope Script
     }
     catch {}
 
@@ -274,6 +275,16 @@ function Invoke-FormMain {
     $script:LabelPlatform.Visible = $false
     $script:Form.Controls.Add($script:LabelPlatform)
 
+    $script:LabelLookup = New-Object System.Windows.Forms.Label
+    $script:LabelLookup.Text = "Look for:"
+    $script:LabelLookup.AutoSize = $true
+    $script:LabelLookup.width = 25
+    $script:LabelLookup.height = 10
+    $script:LabelLookup.location = New-Object System.Drawing.Point(700, 0)
+    $script:LabelLookup.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
+    $script:LabelLookup.Visible = $false
+    $script:Form.Controls.Add($script:LabelLookup)
+
     ######################################################################
     #------------------------ Checkboxes Section ------------------------#
     ######################################################################
@@ -395,18 +406,23 @@ function Invoke-FormMain {
     $script:BoxQuery.Visible = $false
     $script:BoxQuery.Add_TextChanged({
             # Invoke Basic Query validation
-            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
-            if ($script:LabelRunStatus.Text -eq "Proccessing...") {
-                return
-            }
-            if (($null -ne $Status)) {
+            Invoke-QueryValidation -Query $script:BoxQuery.Text -Ligth
+            if (($null -ne $script:ErrorInformation)) {
                 $script:LabelRunStatus.Visible = $true
                 $script:LabelRunStatus.ForeColor = "red"
-                $script:LabelRunStatus.Text = $Status
+                $script:LabelRunStatus.Text = $script:ErrorInformation.'Error Message'
+                Invoke-QueryOptions
             }
             else {
+                $script:LabelLookup.visible = $false
+                $script:BoxLookfor.visible = $false
+                $script:BoxErrorOptions.visible = $false
                 $script:LabelRunStatus.Visible = $false
+                $script:ButtonShowOptions.visible = $false
+                Invoke-FormMainResize -Big
             }
+            
+            
         })
     $script:Form.Controls.Add($script:BoxQuery)
 
@@ -440,6 +456,28 @@ function Invoke-FormMain {
     $script:BoxPort.Visible = $false
     $script:Form.Controls.Add($script:BoxPort)
 
+    $script:BoxLookfor = New-Object System.Windows.Forms.TextBox 
+    $script:BoxLookfor.Text = ""
+    $script:BoxLookfor.AutoSize = $true
+    $script:BoxLookfor.width = 25
+    $script:BoxLookfor.height = 10
+    $script:BoxLookfor.location = New-Object System.Drawing.Point(780, 0)
+    $script:BoxLookfor.Size = New-Object System.Drawing.Size(300, 20)
+    $script:BoxLookfor.Visible = $false
+    $script:Form.Controls.Add($script:BoxLookfor)
+
+    $script:BoxErrorOptions = New-Object System.Windows.Forms.TextBox 
+    $script:BoxErrorOptions.Text = ""
+    $script:BoxErrorOptions.AutoSize = $true
+    $script:BoxErrorOptions.Multiline = $true
+    $script:BoxErrorOptions.Scrollbars = 'Vertical'
+    $script:BoxErrorOptions.width = 25
+    $script:BoxErrorOptions.height = 10
+    $script:BoxErrorOptions.location = New-Object System.Drawing.Point(700, 80)
+    $script:BoxErrorOptions.Size = New-Object System.Drawing.Size(380, 505)
+    $script:BoxErrorOptions.Visible = $false
+    $script:Form.Controls.Add($script:BoxErrorOptions)
+
     ######################################################################
     #------------------------- Buttons Section --------------------------#
     ######################################################################
@@ -450,6 +488,14 @@ function Invoke-FormMain {
     $script:ButtonConnect.Text = 'Connect to portal'
     $script:ButtonConnect.Add_Click({ Invoke-PortalConnection })
     $script:Form.Controls.Add($script:ButtonConnect)
+
+    $script:ButtonShowOptions = New-Object System.Windows.Forms.Button
+    $script:ButtonShowOptions.Location = New-Object System.Drawing.Point(120, 130)
+    $script:ButtonShowOptions.Size = New-Object System.Drawing.Size(100, 30)
+    $script:ButtonShowOptions.Text = 'Show options'
+    $script:ButtonShowOptions.visible = $false
+    $script:ButtonShowOptions.Add_Click({ Invoke-ShowOptions })
+    $script:Form.Controls.Add($script:ButtonShowOptions)
 
     $script:ButtonPath = New-Object System.Windows.Forms.Button
     $script:ButtonPath.Location = New-Object System.Drawing.Point(585, 505)
@@ -535,11 +581,13 @@ function Invoke-FormEnvironment {
 function Invoke-FormMainResize {
     # Function to change window mode
     param (
-        [switch]$Big
+        [switch]$Big,
+        [switch]$Options
     )
     if ($Big) {
         $script:Form.TopMost = $false
         $script:Form.ClientSize = New-Object System.Drawing.Point(700, 600)
+        $script:BoxErrorOptions.visible = $False
         $script:LabelQuery.Visible = $true
         $script:BoxQuery.Visible = $true
         $script:LabelFileName.Visible = $true
@@ -551,6 +599,11 @@ function Invoke-FormMainResize {
         $script:CheckboxWindows.Visible = $true
         $script:CheckboxMac_OS.Visible = $true
         $script:CheckboxMobile.Visible = $true
+        if ($options) {
+            $script:Form.TopMost = $false
+            $script:Form.ClientSize = New-Object System.Drawing.Point(1100, 600)
+            $script:BoxErrorOptions.visible = $true
+        }
     }
     else {
         $script:Form.TopMost = $true
@@ -758,9 +811,6 @@ function Invoke-QueryValidation {
             return "Failed: Some brackets are not closed !"
         }
     }
-    if ($Ligth) {
-        return $null
-    }
     # Check if query is not empty
     if ($Query.Length -le 1) {
         return "Failed: NXQL query can not be blank !"
@@ -777,6 +827,9 @@ function Invoke-QueryValidation {
     if (($Query -notlike "*limit*")) {
         return "Failed: There is no `"limit`" statement at the end of the query!"
     }
+    if ($Ligth) {
+        return $null
+    }
     # Check Platform
     $Platform = @()
     if ($script:CheckboxWindows.checked) {
@@ -792,18 +845,15 @@ function Invoke-QueryValidation {
     $Query = $Query -replace "\(limit [0-9]+\)", "(limit 1)"
     $Engine = ($script:Engines | Select-Object -First 1).address
     $WebAPIPort = $script:BoxPort.text
-    try {
-        Invoke-Nxql `
-            -ServerName $Engine `
-            -PortNumber $WebAPIPort `
-            -credentials $script:Credentials `
-            -Query $Query `
-            -Platforms $Platform | Out-Null
-    }
-    catch {
-        return $_.Exception.Message
-    }
-    return $null
+  
+    $script:ErrorInformation = Invoke-Nxql `
+        -ServerName $Engine `
+        -PortNumber $WebAPIPort `
+        -credentials $script:Credentials `
+        -Query $Query `
+        -Platforms $Platform
+    
+    return
 }
 function Invoke-NXQLQueryRun {
     # Update Export status
@@ -836,11 +886,11 @@ function Invoke-NXQLQueryRun {
         return
     }
     # Invoke Basic Query validation
-    $Status = Invoke-QueryValidation -Query $Query
-    if ($null -ne $Status) {
+    Invoke-QueryValidation -Query $Query
+    if ($null -ne $script:ErrorInformation) {
         $script:LabelRunStatus.Visible = $true
         $script:LabelRunStatus.ForeColor = "red"
-        $script:LabelRunStatus.Text = $Status
+        $script:LabelRunStatus.Text = $script:ErrorInformation."Error message"
         Invoke-Buttons -Enable
         return
     }
@@ -1303,12 +1353,22 @@ Function Invoke-Nxql {
         $streamReader.Dispose()
         $HTML = New-Object -Com "HTMLFile"
         $HTML.IHTMLDocument2_write($responseContent)
-        
-        throw ($html.getElementById("error_message").IHTMLElement_innerText)
+        $Error_Output = @{}
+        $Error_Output.Add("Error Message", ($html.getElementById("error_message").IHTMLElement_innerText))
+        $Error_Output.Add("Error Options", ($html.getElementById("error_options").IHTMLElement_innerText))
+        return $Error_Output
     }
     catch {
         throw 'Not able to retriev data'
     }
+}
+function Invoke-QueryOptions {
+    Invoke-FormMainResize -Big -Options
+
+    $script:LabelLookup.visible = $true
+    $script:BoxLookfor.visible = $true
+    $script:BoxErrorOptions.visible = $true
+    $script:BoxErrorOptions.Text = ($script:ErrorInformation."Error Options")
 }
 Function Invoke-Popup {
     <#
