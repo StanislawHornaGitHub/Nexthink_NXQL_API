@@ -125,14 +125,9 @@ function Invoke-GettingStarted {
         Invoke-FormError -Message "Another instance of this application is already running."
     }
 }
-function Invoke-FormError {
-    param(
-        [Parameter(Mandatory = $true)]
-        [String]$Message
-    )
-    [System.Windows.MessageBox]::Show($Message, 'Application Error', 'OK', 'Error') | Out-Null
-    throw
-}
+######################################################################
+#----------------------- GUI Forms Definition -----------------------#
+######################################################################
 function Invoke-FormMain {
     $script:Form = New-Object system.Windows.Forms.Form
     $script:Form.ClientSize = New-Object System.Drawing.Point(480, 150)
@@ -296,20 +291,7 @@ function Invoke-FormMain {
     $script:CheckboxWindows.checked = $true
     $script:CheckboxWindows.Visible = $false
     $script:CheckboxWindows.TabIndex = 4
-    $script:CheckboxWindows.Add_Click({
-            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
-            if ($script:LabelRunStatus.Text -eq "Proccessing...") {
-                return
-            }
-            if (($null -ne $Status)) {
-                $script:LabelRunStatus.Visible = $true
-                $script:LabelRunStatus.ForeColor = "red"
-                $script:LabelRunStatus.Text = $Status
-            }
-            else {
-                $script:LabelRunStatus.Visible = $false
-            }
-        })
+    $script:CheckboxWindows.Add_Click({ Invoke-CheckboxPlatform })
     $script:Form.Controls.Add($script:CheckboxWindows)
 
     $script:CheckboxMac_OS = New-Object System.Windows.Forms.Checkbox 
@@ -318,20 +300,7 @@ function Invoke-FormMain {
     $script:CheckboxMac_OS.Text = "Mac OS"
     $script:CheckboxMac_OS.Visible = $false
     $script:CheckboxMac_OS.TabIndex = 4
-    $script:CheckboxMac_OS.Add_Click({
-            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
-            if ($script:LabelRunStatus.Text -eq "Proccessing...") {
-                return
-            }
-            if (($null -ne $Status)) {
-                $script:LabelRunStatus.Visible = $true
-                $script:LabelRunStatus.ForeColor = "red"
-                $script:LabelRunStatus.Text = $Status
-            }
-            else {
-                $script:LabelRunStatus.Visible = $false
-            }
-        })
+    $script:CheckboxMac_OS.Add_Click({ Invoke-CheckboxPlatform })
     $script:Form.Controls.Add($script:CheckboxMac_OS)
 
     $script:CheckboxMobile = New-Object System.Windows.Forms.Checkbox 
@@ -340,21 +309,7 @@ function Invoke-FormMain {
     $script:CheckboxMobile.Text = "Mobile"
     $script:CheckboxMobile.Visible = $false
     $script:CheckboxMobile.TabIndex = 4
-    $script:CheckboxMobile.Add_Click({
-            $script:BoxQuery.Focused
-            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
-            if ($script:LabelRunStatus.Text -eq "Proccessing...") {
-                return
-            }
-            if (($null -ne $Status)) {
-                $script:LabelRunStatus.Visible = $true
-                $script:LabelRunStatus.ForeColor = "red"
-                $script:LabelRunStatus.Text = $Status
-            }
-            else {
-                $script:LabelRunStatus.Visible = $false
-            }
-        })
+    $script:CheckboxMobile.Add_Click({ Invoke-CheckboxPlatform })
     $script:Form.Controls.Add($script:CheckboxMobile)
 
     $script:CheckboxShowPassword = New-Object System.Windows.Forms.Checkbox 
@@ -364,14 +319,7 @@ function Invoke-FormMain {
     $script:CheckboxShowPassword.Visible = $true
     $script:CheckboxShowPassword.TabIndex = 4
     $script:CheckboxShowPassword.checked = $false
-    $script:CheckboxShowPassword.Add_Click({
-            if ($script:CheckboxShowPassword.checked) {
-                $script:BoxPassword.passwordchar = $null
-            }
-            else {
-                $script:BoxPassword.passwordchar = "*"
-            }
-        })
+    $script:CheckboxShowPassword.Add_Click({ Invoke-CheckboxShowPassword })
     $script:Form.Controls.Add($script:CheckboxShowPassword)
 
     ######################################################################
@@ -405,24 +353,7 @@ function Invoke-FormMain {
     $script:BoxQuery.Size = New-Object System.Drawing.Size(660, 300)
     $script:BoxQuery.Scrollbars = 'Vertical'
     $script:BoxQuery.Visible = $false
-    $script:BoxQuery.Add_TextChanged({
-            # Invoke Basic Query validation
-            $script:ButtonRunQuery.visible = $false
-            $script:ButtonValidateQuery.visible = $true
-            
-            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text -Ligth
-            if (($null -ne $Status)) {
-                $script:LabelRunStatus.Visible = $true
-                $script:LabelRunStatus.ForeColor = "red"
-                $script:LabelRunStatus.Text = $Status.'Error message'
-            }
-            else {
-                $script:LabelLookup.visible = $false
-                $script:BoxLookfor.visible = $false
-                $script:BoxErrorOptions.visible = $false
-                $script:LabelRunStatus.Visible = $false
-            }
-        })
+    $script:BoxQuery.Add_TextChanged({ Invoke-BoxQuery })
     $script:Form.Controls.Add($script:BoxQuery)
 
     $script:BoxFileName = New-Object System.Windows.Forms.TextBox 
@@ -437,13 +368,7 @@ function Invoke-FormMain {
     $script:BoxPath.Multiline = $false
     $script:BoxPath.Location = New-Object System.Drawing.Size(150, 510) 
     $script:BoxPath.Size = New-Object System.Drawing.Size(430, 20)
-    if ((Get-Location).Path -like "*main") {
-        $path = (Get-Location).Path.Split("\")[0..((Get-Location).Path.Split("\").count - 2)] -join "\"
-    }
-    else {
-        $path = (Get-Location).Path
-    }
-    $script:BoxPath.Text = $path
+    $script:BoxPath.Text = Get-BoxPathLocation
     $script:BoxPath.Visible = $false
     $script:Form.Controls.Add($script:BoxPath)
 
@@ -470,6 +395,7 @@ function Invoke-FormMain {
     $script:BoxErrorOptions.AutoSize = $true
     $script:BoxErrorOptions.Multiline = $true
     $script:BoxErrorOptions.Scrollbars = 'Vertical'
+    $script:BoxErrorOptions.ReadOnly = $true
     $script:BoxErrorOptions.width = 25
     $script:BoxErrorOptions.height = 10
     $script:BoxErrorOptions.location = New-Object System.Drawing.Point(700, 80)
@@ -485,7 +411,7 @@ function Invoke-FormMain {
     $script:ButtonConnect.Location = New-Object System.Drawing.Point(20, 100)
     $script:ButtonConnect.Size = New-Object System.Drawing.Size(100, 30)
     $script:ButtonConnect.Text = 'Connect to portal'
-    $script:ButtonConnect.Add_Click({ Invoke-PortalConnection })
+    $script:ButtonConnect.Add_Click({ Invoke-ButtonConnectToPortal })
     $script:Form.Controls.Add($script:ButtonConnect)
 
     $script:ButtonPath = New-Object System.Windows.Forms.Button
@@ -493,7 +419,7 @@ function Invoke-FormMain {
     $script:ButtonPath.Size = New-Object System.Drawing.Size(100, 30)
     $script:ButtonPath.Text = 'Select'
     $script:ButtonPath.Visible = $false
-    $script:ButtonPath.Add_Click({ $script:BoxPath.Text = Get-Folder -inputFolder $script:BoxPath.Text })
+    $script:ButtonPath.Add_Click({ $script:BoxPath.Text = Invoke-ButtonSelectPath -inputFolder $script:BoxPath.Text })
     $script:Form.Controls.Add($script:ButtonPath)
 
     $script:ButtonWebEditor = New-Object System.Windows.Forms.Button
@@ -501,7 +427,7 @@ function Invoke-FormMain {
     $script:ButtonWebEditor.Size = New-Object System.Drawing.Size(100, 50)
     $script:ButtonWebEditor.Visible = $false
     $script:ButtonWebEditor.Text = 'Open Web Query Editor'
-    $script:ButtonWebEditor.Add_Click({ Invoke-WebQueryEditor })
+    $script:ButtonWebEditor.Add_Click({ Invoke-ButtonQueryWebEditor })
     $script:Form.Controls.Add($script:ButtonWebEditor)
 
     $script:ButtonValidateQuery = New-Object System.Windows.Forms.Button
@@ -510,26 +436,7 @@ function Invoke-FormMain {
     $script:ButtonValidateQuery.Text = 'Validate Query'
     $script:ButtonValidateQuery.Visible = $false
     $script:ButtonValidateQuery.ForeColor = 'orange'
-    $script:ButtonValidateQuery.Add_Click({
-            Invoke-FormMainResize -Big 
-            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
-            if (($null -ne $Status)) {
-                $script:LabelRunStatus.Visible = $true
-                $script:LabelRunStatus.ForeColor = "red"
-                $script:LabelRunStatus.Text = $Status.'Error message'
-                if($null -ne ($Status.'Error Options')){
-                    Invoke-QueryOptions
-                }
-            }
-            else {
-                $script:LabelLookup.visible = $false
-                $script:BoxLookfor.visible = $false
-                $script:BoxErrorOptions.visible = $false
-                $script:LabelRunStatus.Visible = $false
-                $script:ButtonValidateQuery.visible = $false
-                $script:ButtonRunQuery.visible = $true
-            }
-        })
+    $script:ButtonValidateQuery.Add_Click({ Invoke-ButtonValidateQuery })
     $script:Form.Controls.Add($script:ButtonValidateQuery)
 
     $script:ButtonRunQuery = New-Object System.Windows.Forms.Button
@@ -537,7 +444,7 @@ function Invoke-FormMain {
     $script:ButtonRunQuery.Size = New-Object System.Drawing.Size(120, 50)
     $script:ButtonRunQuery.Text = 'Run NXQL Query'
     $script:ButtonRunQuery.Visible = $false
-    $script:ButtonRunQuery.Add_Click({ Invoke-NXQLQueryRun })
+    $script:ButtonRunQuery.Add_Click({ Invoke-ButtonRunNXQLQuery })
     $script:Form.Controls.Add($script:ButtonRunQuery)
 }
 function Invoke-FormEnvironment {
@@ -556,6 +463,10 @@ function Invoke-FormEnvironment {
         $EnvSelect.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
     }
 
+    ######################################################################
+    #-------------------------- Labels Section --------------------------#
+    ######################################################################
+    
     $LabelQuestion = New-Object system.Windows.Forms.Label
     $LabelQuestion.text = "On which environment do you want to run query?"
     $LabelQuestion.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
@@ -565,6 +476,10 @@ function Invoke-FormEnvironment {
     $LabelQuestion.location = New-Object System.Drawing.Point(10, 10)
     $LabelQuestion.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
     $EnvSelect.Controls.Add($LabelQuestion)
+
+    ######################################################################
+    #------------------------- Buttons Section --------------------------#
+    ######################################################################
 
     $ButtonFITS = New-Object System.Windows.Forms.Button
     $ButtonFITS.Location = New-Object System.Drawing.Point(55, 50)
@@ -597,11 +512,23 @@ function Invoke-FormEnvironment {
     $EnvSelect.Controls.Add($ButtonAll)
     [void]$EnvSelect.ShowDialog()
 }
+function Invoke-FormError {
+    param(
+        [Parameter(Mandatory = $true)]
+        [String]$Message
+    )
+    [System.Windows.MessageBox]::Show($Message, 'Application Error', 'OK', 'Error') | Out-Null
+    throw
+}
+######################################################################
+#--------------------------- Forms Modes ----------------------------#
+######################################################################
 function Invoke-FormMainResize {
     # Function to change window mode
     param (
         [switch]$Big,
-        [switch]$Options
+        [switch]$Options,
+        [switch]$ValidQuery
     )
     if ($Big) {
         $script:Form.TopMost = $false
@@ -618,8 +545,14 @@ function Invoke-FormMainResize {
         $script:CheckboxWindows.Visible = $true
         $script:CheckboxMac_OS.Visible = $true
         $script:CheckboxMobile.Visible = $true
-        $script:ButtonRunQuery.visible = $false
-        $script:ButtonValidateQuery.visible = $true
+        if ($ValidQuery) {
+            $script:ButtonValidateQuery.visible = $false
+            $script:ButtonRunQuery.visible = $true
+        }
+        else {
+            $script:ButtonRunQuery.visible = $false
+            $script:ButtonValidateQuery.visible = $true
+        }
         if ($options) {
             $script:Form.TopMost = $false
             $script:Form.ClientSize = New-Object System.Drawing.Point(1100, 600)
@@ -671,58 +604,10 @@ function Invoke-Buttons {
         $script:CheckboxMobile.enabled = $false
     }
 }
-Function Get-Folder {
-    param(
-        $inputFolder
-    )
-    [Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null
-    [System.Windows.Forms.Application]::EnableVisualStyles()
-    $browse = New-Object System.Windows.Forms.FolderBrowserDialog
-    $browse.SelectedPath = $inputFolder
-    $browse.ShowNewFolderButton = $true
-    $browse.Description = "Select a directory"
-    $loop = $true
-    while ($loop) {
-        if ($browse.ShowDialog() -eq "OK") {
-            $loop = $false
-		
-        }
-        else {
-            return $inputFolder
-        }
-    }
-    $browse.SelectedPath
-    $browse.Dispose()
-    return $FolderBrowserDialog.SelectedPath
-}
-function Invoke-CredentialCleanup {
-    param(
-        [switch]$Portal
-    )
-    Invoke-FormMainResize
-    if ($Portal) {
-        $script:ButtonRunQuery.Visible = $false
-        $script:ButtonWebEditor.Visible = $false
-        $script:LabelConnectionStatus.Visible = $false
-        $script:LabelConnectionStatusDetails.Visible = $false
-        $script:LabelNumberOfEngines.Visible = $false
-        $script:LabelRunStatus.Visible = $false
-        $script:BoxPassword.text = ""
-        $script:BoxLogin.text = ""  
-    }
-    else {
-        $script:ButtonRunQuery.Visible = $false
-        $script:ButtonWebEditor.Visible = $false
-        $script:LabelConnectionStatus.Visible = $false
-        $script:LabelConnectionStatusDetails.Visible = $false
-        $script:LabelNumberOfEngines.Visible = $false
-        $script:LabelRunStatus.Visible = $false
-        $script:BoxPassword.text = ""
-        $script:LabelConnectionStatusDetails.Text = ""
-    }
-  
-}
-function Invoke-PortalConnection {
+######################################################################
+#--------------------------- Forms Logic ----------------------------#
+######################################################################
+function Invoke-ButtonConnectToPortal {
     # Remember password while Button is clicked multiple times without changing anything
     $KeepCredentials = $false
     if ($script:LabelConnectionStatusDetails.Text -eq "Connected" -and 
@@ -813,70 +698,74 @@ function Invoke-PortalConnection {
     $script:LabelPort.Visible = $true
     $script:BoxPort.Visible = $true
 }
-function Invoke-QueryValidation {
-    param (
-        [String]$Query,
-        [Switch]$Ligth
+Function Invoke-ButtonSelectPath {
+    param(
+        $inputFolder
     )
-    if ($Query.Length -le 19) {
-        return $null
-    }
-    # Check if all opened brackets in query are closed
-    if (($Query.ToCharArray() | Where-Object { $_ -eq '(' } | Measure-Object).Count `
-            -ne `
-        ($Query.ToCharArray() | Where-Object { $_ -eq ')' } | Measure-Object).Count) {
-        if ($Ligth) {
-            return "Some brackets are not closed !"
+    [Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null
+    [System.Windows.Forms.Application]::EnableVisualStyles()
+    $browse = New-Object System.Windows.Forms.FolderBrowserDialog
+    $browse.SelectedPath = $inputFolder
+    $browse.ShowNewFolderButton = $true
+    $browse.Description = "Select a directory"
+    $loop = $true
+    while ($loop) {
+        if ($browse.ShowDialog() -eq "OK") {
+            $loop = $false
+		
         }
         else {
-            return "Failed: Some brackets are not closed !"
+            return
         }
     }
-    # Check if query is not empty
-    if ($Query.Length -le 1) {
-        return "NXQL query can not be blank !"
-    }
-    # Check if select statement exists
-    if (($Query -notlike "*select*")) {
-        return "There is no `"select`" statement !"
-    }
-    # Check if from statement exists
-    if (($Query -notlike "*from*")) {
-        return "There is no `"from`" statement !"
-    }
-    # Check if limit statement exists
-    if (($Query -notlike "*limit*")) {
-        return "There is no `"limit`" statement at the end of the query!"
-    }
-    if ($Ligth) {
-        return $null
-    }
-    # Check Platform
-    $Platform = @()
-    if ($script:CheckboxWindows.checked) {
-        $Platform += "windows"
-    }
-    if ($script:CheckboxMac_OS.checked) {
-        $Platform += "mac_os"
-    }
-    if ($script:CheckboxMobile.checked) {
-        $Platform += "mobile"
-    }
-    [String]$Query = $script:BoxQuery.Text
-    $Query = $Query -replace "\(limit [0-9]+\)", "(limit 0)"
-    $Engine = ($script:Engines | Select-Object -First 1).address
-    $WebAPIPort = $script:BoxPort.text
-  
-    $script:ErrorInformation = Invoke-Nxql `
-        -ServerName $Engine `
-        -PortNumber $WebAPIPort `
-        -credentials $script:Credentials `
-        -Query $Query `
-        -Platforms $Platform
-    
-    return $script:ErrorInformation
+    $browse.SelectedPath
+    $browse.Dispose()
+    $script:BoxPath.Text = $FolderBrowserDialog.SelectedPath
+    return 
 }
-function Invoke-NXQLQueryRun {
+function Invoke-ButtonValidateQuery {
+    Invoke-FormMainResize -Big 
+    $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
+    if ($null -ne $Status) {
+        $script:LabelRunStatus.Visible = $true
+        $script:LabelRunStatus.ForeColor = "red"
+        $script:LabelRunStatus.Text = $Status.'Error message'
+        if (($Status.'Error Options').count -ne 0) {
+            Invoke-QueryOptions
+        }
+    }
+    else {
+        Invoke-FormMainResize -Big -ValidQuery
+    }
+}
+function Invoke-CredentialCleanup {
+    param(
+        [switch]$Portal
+    )
+    Invoke-FormMainResize
+    if ($Portal) {
+        $script:ButtonRunQuery.Visible = $false
+        $script:ButtonWebEditor.Visible = $false
+        $script:LabelConnectionStatus.Visible = $false
+        $script:LabelConnectionStatusDetails.Visible = $false
+        $script:LabelNumberOfEngines.Visible = $false
+        $script:LabelRunStatus.Visible = $false
+        $script:BoxPassword.text = ""
+        $script:BoxLogin.text = ""  
+    }
+    else {
+        $script:ButtonRunQuery.Visible = $false
+        $script:ButtonWebEditor.Visible = $false
+        $script:LabelConnectionStatus.Visible = $false
+        $script:LabelConnectionStatusDetails.Visible = $false
+        $script:LabelNumberOfEngines.Visible = $false
+        $script:LabelRunStatus.Visible = $false
+        $script:BoxPassword.text = ""
+        $script:LabelConnectionStatusDetails.Text = ""
+    }
+  
+}
+function Invoke-ButtonRunNXQLQuery {
     # Update Export status
     $script:LabelRunStatus.ForeColor = "orange"
     $script:LabelRunStatus.Text = "Proccessing..."
@@ -970,7 +859,7 @@ function Invoke-NXQLQueryRun {
     }
     Invoke-Buttons -Enable
 }
-function Invoke-WebQueryEditor {
+function Invoke-ButtonQueryWebEditor {
     # Select one of the engines
     $engine = ($script:Engines | Select-Object -First 1).address
     # Create a link to NXQL web editor
@@ -978,6 +867,58 @@ function Invoke-WebQueryEditor {
     # Run the link
     Start-Process "$WebEditorAddress"
 }
+function Invoke-BoxQuery {
+    # Invoke Basic Query validation
+    $script:ButtonRunQuery.visible = $false
+    $script:ButtonValidateQuery.visible = $true
+                
+    $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text -Ligth
+    if (($null -ne $Status)) {
+        $script:LabelRunStatus.Visible = $true
+        $script:LabelRunStatus.ForeColor = "red"
+        $script:LabelRunStatus.Text = $Status.'Error message'
+    }
+    else {
+        $script:LabelLookup.visible = $false
+        $script:BoxLookfor.visible = $false
+        $script:BoxErrorOptions.visible = $false
+        $script:LabelRunStatus.Visible = $false
+    }
+}
+function Get-BoxPathLocation {
+    if ((Get-Location).Path -like "*main") {
+        $path = (Get-Location).Path.Split("\")[0..((Get-Location).Path.Split("\").count - 2)] -join "\"
+    }
+    else {
+        $path = (Get-Location).Path
+    }
+    return $path
+}
+function Invoke-CheckboxPlatform {
+    $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
+    if ($script:LabelRunStatus.Text -eq "Proccessing...") {
+        return
+    }
+    if (($null -ne $Status)) {
+        $script:LabelRunStatus.Visible = $true
+        $script:LabelRunStatus.ForeColor = "red"
+        $script:LabelRunStatus.Text = $Status
+    }
+    else {
+        $script:LabelRunStatus.Visible = $false
+    }
+}
+function Invoke-CheckboxShowPassword {
+    if ($script:CheckboxShowPassword.checked) {
+        $script:BoxPassword.passwordchar = $null
+    }
+    else {
+        $script:BoxPassword.passwordchar = "*"
+    }
+}
+######################################################################
+#----------------------- Operation Functions ------------------------#
+######################################################################
 function Get-EngineList {
     <#
 .SYNOPSIS
@@ -1033,6 +974,173 @@ Hastable
         }
     }
     return $engineList
+}
+function Invoke-QueryValidation {
+    param (
+        [String]$Query,
+        [Switch]$Ligth
+    )
+    if ($Query.Length -le 19) {
+        return $null
+    }
+    # Check if all opened brackets in query are closed
+    if (($Query.ToCharArray() | Where-Object { $_ -eq '(' } | Measure-Object).Count `
+            -ne `
+        ($Query.ToCharArray() | Where-Object { $_ -eq ')' } | Measure-Object).Count) {
+        if ($Ligth) {
+            return "Some brackets are not closed !"
+        }
+        else {
+            return "Failed: Some brackets are not closed !"
+        }
+    }
+    # Check if query is not empty
+    if ($Query.Length -le 1) {
+        return "NXQL query can not be blank !"
+    }
+    # Check if select statement exists
+    if (($Query -notlike "*select*")) {
+        return "There is no `"select`" statement !"
+    }
+    # Check if from statement exists
+    if (($Query -notlike "*from*")) {
+        return "There is no `"from`" statement !"
+    }
+    # Check if limit statement exists
+    if (($Query -notlike "*limit*")) {
+        return "There is no `"limit`" statement at the end of the query!"
+    }
+    if ($Ligth) {
+        return $null
+    }
+    # Check Platform
+    $Platform = @()
+    if ($script:CheckboxWindows.checked) {
+        $Platform += "windows"
+    }
+    if ($script:CheckboxMac_OS.checked) {
+        $Platform += "mac_os"
+    }
+    if ($script:CheckboxMobile.checked) {
+        $Platform += "mobile"
+    }
+    [String]$Query = $script:BoxQuery.Text
+    $Query = $Query -replace "\(limit [0-9]+\)", "(limit 0)"
+    $Engine = ($script:Engines | Select-Object -First 1).address
+    $WebAPIPort = $script:BoxPort.text
+  
+    $script:ErrorInformation = Invoke-Nxql `
+        -ServerName $Engine `
+        -PortNumber $WebAPIPort `
+        -credentials $script:Credentials `
+        -Query $Query `
+        -Platforms $Platform
+    
+    return $script:ErrorInformation
+}
+Function Invoke-Nxql {
+    <#
+    .SYNOPSIS
+    Sends an NXQL query to a Nexthink engine.
+
+    .DESCRIPTION
+     Sends an NXQL query to the Web API of Nexthink Engine as HTTP GET using HTTPS.
+     
+    .PARAMETER ServerName
+     Nexthink Engine name or IP address.
+
+    .PARAMETER PortNumber
+    Port number of the Web API (default 1671).
+
+    .PARAMETER UserName
+    User name of the Finder account under which the query is executed.
+
+    .PARAMETER UserPassword
+    User password of the Finder account under which the query is executed.
+
+    .PARAMETER NxqlQuery
+    NXQL query.
+
+    .PARAMETER FirstParamter
+    Value of %1 in the NXQL query.
+
+    .PARAMETER SecondParamter
+    Value of %2 in the NXQL query.
+
+    .PARAMETER OuputFormat
+    NXQL query output format i.e. csv, xml, html, json (default csv).
+
+    .PARAMETER Platforms
+    Platforms on which the query applies i.e. windows, mac_os, mobile (default windows).
+    
+    .EXAMPLE
+    Invoke-Nxql -ServerName 176.31.63.200 -UserName "admin" -UserPassword "admin" 
+    -Platforms=windows,mac_os -NxqlQuery "(select (name) (from device))"
+    #>
+    Param(
+        [Parameter(Mandatory = $true)]
+        [string]$ServerName,
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.PSCredential]$credentials,
+        [Parameter(Mandatory = $true)]
+        [string]$Query,
+        [Parameter(Mandatory = $false)]
+        [int]$PortNumber = 1671,
+        [Parameter(Mandatory = $false)]
+        [string]$OuputFormat = "csv",
+        [Parameter(Mandatory = $false)]
+        [string[]]$Platforms = "windows",
+        [Parameter(Mandatory = $false)]
+        [string]$FirstParameter,
+        [Parameter(Mandatory = $false)]
+        [string]$SecondParameter
+    )
+    $PlaformsString = ""
+    Foreach ($platform in $Platforms) {
+        $PlaformsString += "&platform={0}" -f $platform
+    }
+    $EncodedNxqlQuery = [System.Web.HttpUtility]::UrlEncode($Query)
+    $Url = "https://{0}:{1}/2/query?query={2}&format={3}{4}" -f $ServerName, $PortNumber, $EncodedNxqlQuery, $OuputFormat, $PlaformsString
+    if ($FirstParameter) { 
+        $EncodedFirstParameter = [System.Web.HttpUtility]::UrlEncode($FirstParameter)
+        $Url = "{0}&p1={1}" -f $Url, $EncodedFirstParameter
+    }
+    if ($SecondParameter) { 
+        $EncodedSecondParameter = [System.Web.HttpUtility]::UrlEncode($SecondParameter)
+        $Url = "{0}&p2={1}" -f $Url, $EncodedSecondParameter
+    }
+    #echo $Url
+    try {
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11
+        [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true } 
+        $webclient = New-Object system.net.webclient
+        $webclient.Credentials = New-Object System.Net.NetworkCredential($Credentials.UserName, $credentials.GetNetworkCredential().Password)
+        $webclient.DownloadString($Url)
+    }
+    catch [System.Net.WebException] {
+        $streamReader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
+        $responseContent = $streamReader.ReadToEnd()
+        $streamReader.Dispose()
+        $HTML = New-Object -Com "HTMLFile"
+        $HTML.IHTMLDocument2_write($responseContent)
+        $Error_Output = @{}
+        $Error_Output.Add("Error Message", ($html.getElementById("error_message").IHTMLElement_innerText))
+        $Error_Output.Add("Error Options", ($html.getElementById("error_options").IHTMLElement_innerText))
+        if ($Error_Output.Count -eq 0) {
+            return $null
+        }
+        return $Error_Output
+    }
+    catch {
+        throw 'Not able to retriev data'
+    }
+}
+function Invoke-QueryOptions {
+    Invoke-FormMainResize -Big -Options
+    $script:LabelLookup.visible = $true
+    $script:BoxLookfor.visible = $true
+    $script:BoxErrorOptions.visible = $true
+    $script:BoxErrorOptions.Text = ($script:ErrorInformation."Error Options")
 }
 Function Get-NxqlExport {
     param (
@@ -1288,111 +1396,6 @@ Function Get-NxqlExport {
     else {
         return "Failed: Error unknown"
     }
-}
-Function Invoke-Nxql {
-    <#
-    .SYNOPSIS
-    Sends an NXQL query to a Nexthink engine.
-
-    .DESCRIPTION
-     Sends an NXQL query to the Web API of Nexthink Engine as HTTP GET using HTTPS.
-     
-    .PARAMETER ServerName
-     Nexthink Engine name or IP address.
-
-    .PARAMETER PortNumber
-    Port number of the Web API (default 1671).
-
-    .PARAMETER UserName
-    User name of the Finder account under which the query is executed.
-
-    .PARAMETER UserPassword
-    User password of the Finder account under which the query is executed.
-
-    .PARAMETER NxqlQuery
-    NXQL query.
-
-    .PARAMETER FirstParamter
-    Value of %1 in the NXQL query.
-
-    .PARAMETER SecondParamter
-    Value of %2 in the NXQL query.
-
-    .PARAMETER OuputFormat
-    NXQL query output format i.e. csv, xml, html, json (default csv).
-
-    .PARAMETER Platforms
-    Platforms on which the query applies i.e. windows, mac_os, mobile (default windows).
-    
-    .EXAMPLE
-    Invoke-Nxql -ServerName 176.31.63.200 -UserName "admin" -UserPassword "admin" 
-    -Platforms=windows,mac_os -NxqlQuery "(select (name) (from device))"
-    #>
-    Param(
-        [Parameter(Mandatory = $true)]
-        [string]$ServerName,
-        [Parameter(Mandatory = $true)]
-        [System.Management.Automation.PSCredential]$credentials,
-        [Parameter(Mandatory = $true)]
-        [string]$Query,
-        [Parameter(Mandatory = $false)]
-        [int]$PortNumber = 1671,
-        [Parameter(Mandatory = $false)]
-        [string]$OuputFormat = "csv",
-        [Parameter(Mandatory = $false)]
-        [string[]]$Platforms = "windows",
-        [Parameter(Mandatory = $false)]
-        [string]$FirstParameter,
-        [Parameter(Mandatory = $false)]
-        [string]$SecondParameter
-    )
-    $PlaformsString = ""
-    Foreach ($platform in $Platforms) {
-        $PlaformsString += "&platform={0}" -f $platform
-    }
-    $EncodedNxqlQuery = [System.Web.HttpUtility]::UrlEncode($Query)
-    $Url = "https://{0}:{1}/2/query?query={2}&format={3}{4}" -f $ServerName, $PortNumber, $EncodedNxqlQuery, $OuputFormat, $PlaformsString
-    if ($FirstParameter) { 
-        $EncodedFirstParameter = [System.Web.HttpUtility]::UrlEncode($FirstParameter)
-        $Url = "{0}&p1={1}" -f $Url, $EncodedFirstParameter
-    }
-    if ($SecondParameter) { 
-        $EncodedSecondParameter = [System.Web.HttpUtility]::UrlEncode($SecondParameter)
-        $Url = "{0}&p2={1}" -f $Url, $EncodedSecondParameter
-    }
-    #echo $Url
-    try {
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11
-        [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true } 
-        $webclient = New-Object system.net.webclient
-        $webclient.Credentials = New-Object System.Net.NetworkCredential($Credentials.UserName, $credentials.GetNetworkCredential().Password)
-        $webclient.DownloadString($Url)
-    }
-    catch [System.Net.WebException] {
-        $streamReader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
-        $responseContent = $streamReader.ReadToEnd()
-        $streamReader.Dispose()
-        $HTML = New-Object -Com "HTMLFile"
-        $HTML.IHTMLDocument2_write($responseContent)
-        $Error_Output = @{}
-        $Error_Output.Add("Error Message", ($html.getElementById("error_message").IHTMLElement_innerText))
-        $Error_Output.Add("Error Options", ($html.getElementById("error_options").IHTMLElement_innerText))
-        if($Error_Output.Count -eq 0){
-            return $null
-        }
-        return $Error_Output
-    }
-    catch {
-        throw 'Not able to retriev data'
-    }
-}
-function Invoke-QueryOptions {
-    Invoke-FormMainResize -Big -Options
-
-    $script:LabelLookup.visible = $true
-    $script:BoxLookfor.visible = $true
-    $script:BoxErrorOptions.visible = $true
-    $script:BoxErrorOptions.Text = ($script:ErrorInformation."Error Options")
 }
 Function Invoke-Popup {
     <#
