@@ -341,6 +341,7 @@ function Invoke-FormMain {
     $script:CheckboxMobile.Visible = $false
     $script:CheckboxMobile.TabIndex = 4
     $script:CheckboxMobile.Add_Click({
+            $script:BoxQuery.Focused
             $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
             if ($script:LabelRunStatus.Text -eq "Proccessing...") {
                 return
@@ -406,23 +407,21 @@ function Invoke-FormMain {
     $script:BoxQuery.Visible = $false
     $script:BoxQuery.Add_TextChanged({
             # Invoke Basic Query validation
-            Invoke-QueryValidation -Query $script:BoxQuery.Text -Ligth
-            if (($null -ne $script:ErrorInformation)) {
+            $script:ButtonRunQuery.visible = $false
+            $script:ButtonValidateQuery.visible = $true
+            
+            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text -Ligth
+            if (($null -ne $Status)) {
                 $script:LabelRunStatus.Visible = $true
                 $script:LabelRunStatus.ForeColor = "red"
-                $script:LabelRunStatus.Text = $script:ErrorInformation.'Error Message'
-                Invoke-QueryOptions
+                $script:LabelRunStatus.Text = $Status.'Error message'
             }
             else {
                 $script:LabelLookup.visible = $false
                 $script:BoxLookfor.visible = $false
                 $script:BoxErrorOptions.visible = $false
                 $script:LabelRunStatus.Visible = $false
-                $script:ButtonShowOptions.visible = $false
-                Invoke-FormMainResize -Big
             }
-            
-            
         })
     $script:Form.Controls.Add($script:BoxQuery)
 
@@ -489,14 +488,6 @@ function Invoke-FormMain {
     $script:ButtonConnect.Add_Click({ Invoke-PortalConnection })
     $script:Form.Controls.Add($script:ButtonConnect)
 
-    $script:ButtonShowOptions = New-Object System.Windows.Forms.Button
-    $script:ButtonShowOptions.Location = New-Object System.Drawing.Point(120, 130)
-    $script:ButtonShowOptions.Size = New-Object System.Drawing.Size(100, 30)
-    $script:ButtonShowOptions.Text = 'Show options'
-    $script:ButtonShowOptions.visible = $false
-    $script:ButtonShowOptions.Add_Click({ Invoke-ShowOptions })
-    $script:Form.Controls.Add($script:ButtonShowOptions)
-
     $script:ButtonPath = New-Object System.Windows.Forms.Button
     $script:ButtonPath.Location = New-Object System.Drawing.Point(585, 505)
     $script:ButtonPath.Size = New-Object System.Drawing.Size(100, 30)
@@ -512,6 +503,35 @@ function Invoke-FormMain {
     $script:ButtonWebEditor.Text = 'Open Web Query Editor'
     $script:ButtonWebEditor.Add_Click({ Invoke-WebQueryEditor })
     $script:Form.Controls.Add($script:ButtonWebEditor)
+
+    $script:ButtonValidateQuery = New-Object System.Windows.Forms.Button
+    $script:ButtonValidateQuery.Location = New-Object System.Drawing.Point(20, 540)
+    $script:ButtonValidateQuery.Size = New-Object System.Drawing.Size(120, 50)
+    $script:ButtonValidateQuery.Text = 'Validate Query'
+    $script:ButtonValidateQuery.Visible = $false
+    $script:ButtonValidateQuery.ForeColor = 'orange'
+    $script:ButtonValidateQuery.Add_Click({
+            Invoke-FormMainResize -Big 
+            $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
+            if (($null -ne $Status)) {
+                $script:LabelRunStatus.Visible = $true
+                $script:LabelRunStatus.ForeColor = "red"
+                $script:LabelRunStatus.Text = $Status.'Error message'
+                if($null -ne ($Status.'Error Options')){
+                    Invoke-QueryOptions
+                }
+            }
+            else {
+                $script:LabelLookup.visible = $false
+                $script:BoxLookfor.visible = $false
+                $script:BoxErrorOptions.visible = $false
+                $script:LabelRunStatus.Visible = $false
+                $script:ButtonShowOptions.visible = $false
+                $script:ButtonValidateQuery.visible = $false
+                $script:ButtonRunQuery.visible = $true
+            }
+        })
+    $script:Form.Controls.Add($script:ButtonValidateQuery)
 
     $script:ButtonRunQuery = New-Object System.Windows.Forms.Button
     $script:ButtonRunQuery.Location = New-Object System.Drawing.Point(20, 540)
@@ -599,6 +619,8 @@ function Invoke-FormMainResize {
         $script:CheckboxWindows.Visible = $true
         $script:CheckboxMac_OS.Visible = $true
         $script:CheckboxMobile.Visible = $true
+        $script:ButtonRunQuery.visible = $false
+        $script:ButtonValidateQuery.visible = $true
         if ($options) {
             $script:Form.TopMost = $false
             $script:Form.ClientSize = New-Object System.Drawing.Point(1100, 600)
@@ -813,19 +835,19 @@ function Invoke-QueryValidation {
     }
     # Check if query is not empty
     if ($Query.Length -le 1) {
-        return "Failed: NXQL query can not be blank !"
+        return "NXQL query can not be blank !"
     }
     # Check if select statement exists
     if (($Query -notlike "*select*")) {
-        return "Failed: There is no `"select`" statement !"
+        return "There is no `"select`" statement !"
     }
     # Check if from statement exists
     if (($Query -notlike "*from*")) {
-        return "Failed: There is no `"from`" statement !"
+        return "There is no `"from`" statement !"
     }
     # Check if limit statement exists
     if (($Query -notlike "*limit*")) {
-        return "Failed: There is no `"limit`" statement at the end of the query!"
+        return "There is no `"limit`" statement at the end of the query!"
     }
     if ($Ligth) {
         return $null
@@ -842,7 +864,7 @@ function Invoke-QueryValidation {
         $Platform += "mobile"
     }
     [String]$Query = $script:BoxQuery.Text
-    $Query = $Query -replace "\(limit [0-9]+\)", "(limit 1)"
+    $Query = $Query -replace "\(limit [0-9]+\)", "(limit 0)"
     $Engine = ($script:Engines | Select-Object -First 1).address
     $WebAPIPort = $script:BoxPort.text
   
@@ -853,7 +875,7 @@ function Invoke-QueryValidation {
         -Query $Query `
         -Platforms $Platform
     
-    return
+    return $script:ErrorInformation
 }
 function Invoke-NXQLQueryRun {
     # Update Export status
@@ -1356,6 +1378,9 @@ Function Invoke-Nxql {
         $Error_Output = @{}
         $Error_Output.Add("Error Message", ($html.getElementById("error_message").IHTMLElement_innerText))
         $Error_Output.Add("Error Options", ($html.getElementById("error_options").IHTMLElement_innerText))
+        if($Error_Output.Count -eq 0){
+            return $null
+        }
         return $Error_Output
     }
     catch {
