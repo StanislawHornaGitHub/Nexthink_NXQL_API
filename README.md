@@ -17,7 +17,7 @@
     Merged Nexthink engines output
 
 ## NOTES
-    Version:            1.04
+    Version:            1.05
     Author:             Stanislaw Horna
     Mail:               stanislaw.horna@atos.net
     Creation Date:      16-Feb-2023
@@ -40,6 +40,9 @@
 
     2023-02-28      Stanislaw Horna         Error Handling for invalid query - 
                                             returns the same message as NXQL WebEditor.
+
+    2023-03-01      Stanislaw Horna         Handling for displaying possible options,
+                                            if query has incorrect column name. (typo etc.)
 
 ## To-Do
     1. Handling if "Custom field" column name is incorrect.

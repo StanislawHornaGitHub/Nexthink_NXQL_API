@@ -41,6 +41,8 @@
     2023-02-28      Stanislaw Horna         Error Handling for invalid query - 
                                             returns the same message as NXQL WebEditor.
                                             
+    2023-03-01      Stanislaw Horna         Handling for displaying possible options,
+                                            if query has incorrect column name. (typo etc.)
 #>
 
 function Invoke-main {
