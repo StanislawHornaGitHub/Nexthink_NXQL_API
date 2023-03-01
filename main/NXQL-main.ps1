@@ -436,6 +436,7 @@ function Invoke-FormMain {
     $script:ButtonValidateQuery.Text = 'Validate Query'
     $script:ButtonValidateQuery.Visible = $false
     $script:ButtonValidateQuery.ForeColor = 'orange'
+    $script:ButtonValidateQuery.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 10, [System.Drawing.FontStyle]::Bold)
     $script:ButtonValidateQuery.Add_Click({ Invoke-ButtonValidateQuery })
     $script:Form.Controls.Add($script:ButtonValidateQuery)
 
@@ -444,6 +445,8 @@ function Invoke-FormMain {
     $script:ButtonRunQuery.Size = New-Object System.Drawing.Size(120, 50)
     $script:ButtonRunQuery.Text = 'Run NXQL Query'
     $script:ButtonRunQuery.Visible = $false
+    $script:ButtonRunQuery.ForeColor = 'green'
+    $script:ButtonRunQuery.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 10, [System.Drawing.FontStyle]::Bold)
     $script:ButtonRunQuery.Add_Click({ Invoke-ButtonRunNXQLQuery })
     $script:Form.Controls.Add($script:ButtonRunQuery)
 }
@@ -727,14 +730,17 @@ function Invoke-ButtonValidateQuery {
     Invoke-FormMainResize -Big 
     $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
     if ($null -ne $Status) {
+        Write-Host $Status
         $script:LabelRunStatus.Visible = $true
         $script:LabelRunStatus.ForeColor = "red"
         $script:LabelRunStatus.Text = $Status.'Error message'
         if (($Status.'Error Options').count -ne 0) {
+            Write-Host $Status.'Error Options'
             Invoke-QueryOptions
         }
     }
     else {
+        Write-Host "Valid Query"
         Invoke-FormMainResize -Big -ValidQuery
     }
 }
@@ -1029,7 +1035,7 @@ function Invoke-QueryValidation {
     $Engine = ($script:Engines | Select-Object -First 1).address
     $WebAPIPort = $script:BoxPort.text
   
-    $script:ErrorInformation = Invoke-Nxql `
+    $script:ErrorInformation = Invoke-NXTEngineQueryValidation `
         -ServerName $Engine `
         -PortNumber $WebAPIPort `
         -credentials $script:Credentials `
@@ -1038,7 +1044,7 @@ function Invoke-QueryValidation {
     
     return $script:ErrorInformation
 }
-Function Invoke-Nxql {
+Function Invoke-NXTEngineQueryValidation {
     <#
     .SYNOPSIS
     Sends an NXQL query to a Nexthink engine.
@@ -1115,7 +1121,7 @@ Function Invoke-Nxql {
         [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true } 
         $webclient = New-Object system.net.webclient
         $webclient.Credentials = New-Object System.Net.NetworkCredential($Credentials.UserName, $credentials.GetNetworkCredential().Password)
-        $webclient.DownloadString($Url)
+        $webclient.DownloadString($Url) | Out-Null
     }
     catch [System.Net.WebException] {
         $streamReader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
@@ -1134,6 +1140,7 @@ Function Invoke-Nxql {
     catch {
         throw 'Not able to retriev data'
     }
+    return $null
 }
 function Invoke-QueryOptions {
     Invoke-FormMainResize -Big -Options
