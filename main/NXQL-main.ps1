@@ -277,10 +277,20 @@ function Invoke-FormMain {
     $script:LabelLookup.AutoSize = $true
     $script:LabelLookup.width = 25
     $script:LabelLookup.height = 10
-    $script:LabelLookup.location = New-Object System.Drawing.Point(700, 0)
+    $script:LabelLookup.location = New-Object System.Drawing.Point(695, 0)
     $script:LabelLookup.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
     $script:LabelLookup.Visible = $false
     $script:Form.Controls.Add($script:LabelLookup)
+
+    $script:LabelOptionsAre = New-Object System.Windows.Forms.Label
+    $script:LabelOptionsAre.Text = "Options are:"
+    $script:LabelOptionsAre.AutoSize = $true
+    $script:LabelOptionsAre.width = 25
+    $script:LabelOptionsAre.height = 10
+    $script:LabelOptionsAre.location = New-Object System.Drawing.Point(695, 35)
+    $script:LabelOptionsAre.Font = New-Object System.Drawing.Font('Microsoft Sans Serif', 12)
+    $script:LabelOptionsAre.Visible = $false
+    $script:Form.Controls.Add($script:LabelOptionsAre)
 
     ######################################################################
     #------------------------ Checkboxes Section ------------------------#
@@ -332,7 +342,7 @@ function Invoke-FormMain {
     $script:BoxPortal.Multiline = $false
     $script:BoxPortal.Location = New-Object System.Drawing.Size(140, 0) 
     $script:BoxPortal.Size = New-Object System.Drawing.Size(300, 20)
-    $script:BoxPortal.Add_TextChanged({ Invoke-CredentialCleanup -Portal })
+    $script:BoxPortal.Add_TextChanged({ Invoke-BoxPortal })
     $script:Form.Controls.Add($script:BoxPortal)
 
     $script:BoxLogin = New-Object System.Windows.Forms.TextBox 
@@ -387,9 +397,10 @@ function Invoke-FormMain {
     $script:BoxLookfor.AutoSize = $true
     $script:BoxLookfor.width = 25
     $script:BoxLookfor.height = 10
-    $script:BoxLookfor.location = New-Object System.Drawing.Point(780, 0)
-    $script:BoxLookfor.Size = New-Object System.Drawing.Size(300, 20)
+    $script:BoxLookfor.location = New-Object System.Drawing.Point(765, 0)
+    $script:BoxLookfor.Size = New-Object System.Drawing.Size(315, 20)
     $script:BoxLookfor.Visible = $false
+    $script:BoxLookfor.Add_TextChanged({ Invoke-BoxLookFor })
     $script:Form.Controls.Add($script:BoxLookfor)
 
     $script:BoxErrorOptions = New-Object System.Windows.Forms.TextBox 
@@ -400,8 +411,8 @@ function Invoke-FormMain {
     $script:BoxErrorOptions.ReadOnly = $true
     $script:BoxErrorOptions.width = 25
     $script:BoxErrorOptions.height = 10
-    $script:BoxErrorOptions.location = New-Object System.Drawing.Point(700, 80)
-    $script:BoxErrorOptions.Size = New-Object System.Drawing.Size(380, 505)
+    $script:BoxErrorOptions.location = New-Object System.Drawing.Point(700, 60)
+    $script:BoxErrorOptions.Size = New-Object System.Drawing.Size(380, 525)
     $script:BoxErrorOptions.Visible = $false
     $script:Form.Controls.Add($script:BoxErrorOptions)
 
@@ -738,13 +749,12 @@ function Invoke-ButtonValidateQuery {
             Invoke-QueryOptions
         }
         else {
-            $script:LabelRunStatus.Visible = $false
-            $script:LabelRunStatus.ForeColor = "black"
             Invoke-FormMainResize -Big
         }
     }
     else {
-        Write-Host "Valid Query"
+        $script:LabelRunStatus.Visible = $false
+        $script:LabelRunStatus.ForeColor = "black"
         Invoke-FormMainResize -Big -ValidQuery
     }
 }
@@ -877,6 +887,14 @@ function Invoke-ButtonQueryWebEditor {
     # Run the link
     Start-Process "$WebEditorAddress"
 }
+function Invoke-BoxPortal {
+    if ($script:BoxPortal.text -like "https://*") {
+        $FQDN = $script:BoxPortal.text
+        $script:BoxPortal.text = $FQDN.Substring("https://".Length, ($FQDN.Length - ("https://".Length))).Split("/")[0]
+    }
+    Invoke-CredentialCleanup -Portal
+}
+
 function Invoke-BoxQuery {
     # Invoke Basic Query validation
     $script:ButtonRunQuery.visible = $false
@@ -890,8 +908,10 @@ function Invoke-BoxQuery {
     }
 }
 function Invoke-BoxLookFor {
-
-    
+    $Keyword = $script:BoxLookfor.Text
+    $Keyword = $Keyword.Replace(" ", "_")
+    $CurrentOptions = (($script:ErrorInformation."Error Options").Split("`n") | Select-Object -Skip 1) -join "`n" 
+    $script:BoxErrorOptions.Text = ($CurrentOptions.Split("`n") | Where-Object { $_ -like "*$Keyword*" }) -join "`n"
 }
 function Get-BoxPathLocation {
     if ((Get-Location).Path -like "*main") {
@@ -903,18 +923,7 @@ function Get-BoxPathLocation {
     return $path
 }
 function Invoke-CheckboxPlatform {
-    $Status = Invoke-QueryValidation -Query $script:BoxQuery.Text 
-    if ($script:LabelRunStatus.Text -eq "Proccessing...") {
-        return
-    }
-    if (($null -ne $Status)) {
-        $script:LabelRunStatus.Visible = $true
-        $script:LabelRunStatus.ForeColor = "red"
-        $script:LabelRunStatus.Text = $Status
-    }
-    else {
-        $script:LabelRunStatus.Visible = $false
-    }
+    Invoke-ButtonValidateQuery
 }
 function Invoke-CheckboxShowPassword {
     if ($script:CheckboxShowPassword.checked) {
@@ -1126,7 +1135,17 @@ Function Invoke-NXTEngineQueryValidation {
         $webclient.DownloadString($Url) | Out-Null
     }
     catch [System.Net.WebException] {
-        $streamReader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
+        try {
+            $streamReader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
+        }
+        catch {
+            if($Query -like "*#*"){
+                $Error_Output = @{"Error Message" = 'The dynamic field does not exist for selected table.'}
+            }else{
+                $Error_Output = @{"Error Message" = 'Query is invalid, error unknown.'}
+            }
+            return $Error_Output
+        }
         $responseContent = $streamReader.ReadToEnd()
         $streamReader.Dispose()
         $HTML = New-Object -Com "HTMLFile"
@@ -1149,8 +1168,11 @@ function Invoke-QueryOptions {
     $script:LabelLookup.visible = $true
     $script:BoxLookfor.visible = $true
     $script:BoxErrorOptions.visible = $true
+    $script:LabelOptionsAre.Visible = $true
     $ErrorOptions = (($script:ErrorInformation."Error Options").Split("`n") | Select-Object -Skip 1) -join "`n" 
     $script:BoxErrorOptions.Text = $ErrorOptions
+    $ErrorMessage = $script:ErrorInformation."Error Message"
+    $script:BoxLookfor.text = ($ErrorMessage.Split("'*'")[1])
 }
 Function Get-NxqlExport {
     param (
